@@ -7,7 +7,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -179,7 +178,7 @@ async fn main() -> Result<()> {
                 if repos.is_empty() {
                     println!("No repositories found.");
                 } else {
-                    println!("{:<30} {:<10} {}", "NAME", "BARE", "PATH");
+                    println!("{:<30} {:<10} PATH", "NAME", "BARE");
                     for r in &repos {
                         println!("{:<30} {:<10} {}", r.name, r.bare, r.path);
                     }
@@ -192,7 +191,7 @@ async fn main() -> Result<()> {
             if refs.is_empty() {
                 println!("No refs found for {}", repo);
             } else {
-                println!("{:<40} {:<8} {}", "REF", "KIND", "SHA");
+                println!("{:<40} {:<8} SHA", "REF", "KIND");
                 for r in &refs {
                     println!("{:<40} {:<8} {}", r.name, r.kind, r.sha);
                 }
@@ -205,8 +204,8 @@ async fn main() -> Result<()> {
                     println!("No identities found.");
                 } else {
                     println!(
-                        "{:<20} {:<10} {:<20} {}",
-                        "NAME", "KIND", "DISPLAY", "TOKENS"
+                        "{:<20} {:<10} {:<20} TOKENS",
+                        "NAME", "KIND", "DISPLAY"
                     );
                     for i in &identities {
                         println!(
@@ -247,8 +246,8 @@ async fn main() -> Result<()> {
                     println!("No custom policy rules found.");
                 } else {
                     println!(
-                        "{:<20} {:<20} {:<15} {:<10} {}",
-                        "IDENTITY", "ACTION", "PERMISSION", "REPO", "REASON"
+                        "{:<20} {:<20} {:<15} {:<10} REASON",
+                        "IDENTITY", "ACTION", "PERMISSION", "REPO"
                     );
                     for r in &rules {
                         println!(
@@ -317,8 +316,8 @@ async fn main() -> Result<()> {
                 println!("No audit entries found.");
             } else {
                 println!(
-                    "{:<25} {:<15} {:<20} {:<15} {}",
-                    "TIME", "IDENTITY", "REPO", "ACTION", "RESULT"
+                    "{:<25} {:<15} {:<20} {:<15} RESULT",
+                    "TIME", "IDENTITY", "REPO", "ACTION"
                 );
                 for e in &entries {
                     println!(
@@ -507,6 +506,7 @@ impl ApiClient {
         resp.json().await.context("Failed to parse response")
     }
 
+    #[allow(dead_code)]
     async fn post_empty<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
         let mut req = self.http.post(format!("{}{}", self.base_url, path));
         if let Some(auth) = self.auth_header() {
