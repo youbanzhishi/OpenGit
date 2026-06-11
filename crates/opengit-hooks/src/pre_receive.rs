@@ -1,45 +1,79 @@
-//! Pre-receive hook — Evaluates push operations against policy
+//! Pre-receive hook — Evaluate policy for all ref updates atomically
 //!
-//! Installed as: repo.git/hooks/pre-receive
-//! Reads stdin: <old-sha> <new-sha> <ref-name>\n
-//! Exit 0 = allow, Exit 1 = deny
+//! This binary is installed as a Git pre-receive hook.
+//! It reads ref updates from stdin, evaluates them against policy,
+//! and rejects the entire push if any ref violates policy.
+//!
+//! Environment variables (set by OpenGit server):
+//!   OPENGIT_IDENTITY — The authenticated identity name
+//!   OPENGIT_REPO     — The repository name
+//!   OPENGIT_POLICY   — Path to policies.yaml
+//!   OPENGIT_REPO_PATH — Path to the bare repo (for force push detection)
 
-use opengit_core::{
-    audit::AuditLog,
-    hook::{HookContext, HookPipeline, HookType, RefUpdate},
-    policy::PolicyEngine,
-};
-use std::io::{self, Read};
+use std::io::{self, BufRead};
+use std::path::PathBuf;
 
 fn main() {
+    let identity = std::env::var("OPENGIT_IDENTITY").unwrap_or_else(|_| "anonymous".into());
     let repo = std::env::var("OPENGIT_REPO").unwrap_or_else(|_| "unknown".into());
-    let identity = std::env::var("OPENGIT_IDENTITY").unwrap_or_else(|_| "unknown".into());
+    let policy_path =
+        std::env::var("OPENGIT_POLICY").unwrap_or_else(|_| "config/policies.yaml".into());
+    let repo_path = std::env::var("OPENGIT_REPO_PATH").unwrap_or_else(|_| ".".into());
 
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input).unwrap_or_default();
+    // Load policy engine
+    let engine = match opengit_core::PolicyEngine::from_file(&PathBuf::from(&policy_path)) {
+        Ok(e) => e,
+        Err(_) => opengit_core::PolicyEngine::new(),
+    };
 
-    let updates = HookPipeline::parse_pre_receive_input(&input);
+    // Read ref updates from stdin
+    let stdin = io::stdin();
+    let mut updates = Vec::new();
+
+    for line in stdin.lock().lines().map_while(Result::ok) {
+        if line.trim().is_empty() {
+            break;
+        }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 3 {
+            updates.push((
+                parts[0].to_string(),
+                parts[1].to_string(),
+                parts[2].to_string(),
+            ));
+        }
+    }
+
     if updates.is_empty() {
         std::process::exit(0);
     }
 
-    let policy_engine = PolicyEngine::new(); // In production, load from config
-    let audit_log = AuditLog::new();
-    let pipeline = HookPipeline::new(policy_engine, audit_log);
+    // Evaluate each ref update
+    let mut denied = false;
+    for (old_sha, new_sha, ref_name) in &updates {
+        let result = engine.evaluate_push_with_repo(
+            &repo,
+            &identity,
+            ref_name,
+            old_sha,
+            new_sha,
+            &PathBuf::from(&repo_path),
+        );
 
-    let ctx = HookContext {
-        repo,
-        identity,
-        hook_type: HookType::PreReceive,
-        env: Default::default(),
-    };
-
-    let result = pipeline.process_pre_receive(&ctx, &updates);
-
-    if !result.allowed {
-        eprintln!("{}", result.message);
-        std::process::exit(1);
+        if !result.is_allowed() {
+            let action_str = format!("{:?}", result.action);
+            eprintln!(
+                "DRAGON_FIREWALL: DENIED — {} on {} by {} — {}",
+                action_str,
+                ref_name,
+                identity,
+                result.reason.as_deref().unwrap_or("policy denied"),
+            );
+            denied = true;
+        }
     }
 
-    std::process::exit(0);
+    if denied {
+        std::process::exit(1);
+    }
 }

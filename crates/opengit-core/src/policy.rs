@@ -288,7 +288,54 @@ impl PolicyEngine {
         }
     }
 
-    /// Evaluate a git push ref update
+    /// Evaluate a git push ref update with force push detection
+    ///
+    /// Uses repository access to check if old_sha is an ancestor of new_sha.
+    /// If not, it's a force push — and the ForcePush policy is checked.
+    pub fn evaluate_push_with_repo(
+        &self,
+        repo: &str,
+        identity: &str,
+        ref_name: &str,
+        old_sha: &str,
+        new_sha: &str,
+        repo_path: &std::path::Path,
+    ) -> EvalResult {
+        let action = classify_push_action(ref_name, old_sha, new_sha);
+
+        // For non-delete updates, check if it's a force push
+        if action == Action::Push && old_sha != ZERO_SHA {
+            // Check if old_sha is an ancestor of new_sha
+            // If not, this is a force push
+            if let Ok(git_repo) = crate::repository::Repository::open(repo_path) {
+                match git_repo.is_ancestor(old_sha, new_sha) {
+                    Ok(true) => {
+                        // Normal push — old is ancestor of new
+                    }
+                    Ok(false) => {
+                        // Force push! — old is NOT ancestor of new
+                        return self.evaluate(repo, identity, Action::ForcePush);
+                    }
+                    Err(e) => {
+                        // Can't determine ancestry — be conservative and check ForcePush
+                        tracing::warn!(
+                            "Cannot determine ancestry for force push check: {} — treating as potential force push",
+                            e
+                        );
+                        let force_result = self.evaluate(repo, identity, Action::ForcePush);
+                        if !force_result.is_allowed() {
+                            return force_result;
+                        }
+                        // If force push is allowed, fall through to normal push check
+                    }
+                }
+            }
+        }
+
+        self.evaluate(repo, identity, action)
+    }
+
+    /// Evaluate a git push ref update (without force push detection — for hook pipeline)
     pub fn evaluate_push(
         &self,
         repo: &str,
@@ -297,28 +344,7 @@ impl PolicyEngine {
         old_sha: &str,
         new_sha: &str,
     ) -> EvalResult {
-        // Detect the actual action from ref update
-        let action = if new_sha == "0000000000000000000000000000000000000000" {
-            // Deleting a branch/tag
-            Action::DeleteBranch
-        } else if old_sha == "0000000000000000000000000000000000000000" {
-            // Creating a new branch/tag
-            Action::Push
-        } else {
-            // Updating — need to check if force push
-            // (In a full implementation, we'd check if old_sha is ancestor of new_sha)
-            Action::Push
-        };
-
-        // Also check force push specifically
-        if action == Action::Push && old_sha != "0000000000000000000000000000000000000000" {
-            // Check force push permission as well
-            let force_result = self.evaluate(repo, identity, Action::ForcePush);
-            // The actual force detection happens in the hook pipeline
-            // Here we just pre-check the permission
-            let _ = force_result;
-        }
-
+        let action = classify_push_action(_ref_name, old_sha, new_sha);
         self.evaluate(repo, identity, action)
     }
 
@@ -329,6 +355,30 @@ impl PolicyEngine {
             }
         }
         &self.default_policy
+    }
+}
+
+/// The zero SHA used in Git protocol to represent "no object"
+const ZERO_SHA: &str = "0000000000000000000000000000000000000000";
+
+/// Classify the action type from a ref update
+fn classify_push_action(ref_name: &str, old_sha: &str, new_sha: &str) -> Action {
+    if new_sha == ZERO_SHA {
+        // Deleting a ref
+        if ref_name.starts_with("refs/tags/") {
+            Action::Tag
+        } else {
+            Action::DeleteBranch
+        }
+    } else if old_sha == ZERO_SHA {
+        // Creating a new ref
+        Action::Push
+    } else if ref_name.starts_with("refs/tags/") {
+        // Updating a tag (shouldn't happen normally, but treat as tag action)
+        Action::Tag
+    } else {
+        // Normal push update — force push detection happens at a higher level
+        Action::Push
     }
 }
 
@@ -490,5 +540,41 @@ mod tests {
         // Unknown identity pattern with no matching rule = deny
         let result = engine.evaluate("my-repo", "service-unknown", Action::Admin);
         assert!(!result.is_allowed());
+    }
+
+    #[test]
+    fn test_classify_push_action() {
+        // Delete branch
+        assert_eq!(
+            classify_push_action(
+                "refs/heads/feature",
+                "abc123",
+                "0000000000000000000000000000000000000000"
+            ),
+            Action::DeleteBranch
+        );
+        // Delete tag
+        assert_eq!(
+            classify_push_action(
+                "refs/tags/v1.0",
+                "abc123",
+                "0000000000000000000000000000000000000000"
+            ),
+            Action::Tag
+        );
+        // New branch
+        assert_eq!(
+            classify_push_action(
+                "refs/heads/feature",
+                "0000000000000000000000000000000000000000",
+                "abc123"
+            ),
+            Action::Push
+        );
+        // Normal update
+        assert_eq!(
+            classify_push_action("refs/heads/master", "abc123", "def456"),
+            Action::Push
+        );
     }
 }

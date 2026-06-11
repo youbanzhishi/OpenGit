@@ -1,18 +1,14 @@
-//! Update hook — Per-ref evaluation (runs after pre-receive)
+//! Update hook — Evaluate policy for a single ref update
 //!
-//! Installed as: repo.git/hooks/update
-//! Args: <ref-name> <old-sha> <new-sha>
-//! Exit 0 = allow, Exit 1 = deny
+//! Called once per ref being updated, after pre-receive succeeds.
+//! This is a secondary check — pre-receive is the primary gate.
 
-use opengit_core::{
-    audit::AuditLog,
-    hook::{HookContext, HookPipeline, HookType, RefUpdate},
-    policy::PolicyEngine,
-};
+use std::path::PathBuf;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 4 {
+        eprintln!("Usage: update <ref> <old-sha> <new-sha>");
         std::process::exit(1);
     }
 
@@ -20,32 +16,35 @@ fn main() {
     let old_sha = &args[2];
     let new_sha = &args[3];
 
+    let identity = std::env::var("OPENGIT_IDENTITY").unwrap_or_else(|_| "anonymous".into());
     let repo = std::env::var("OPENGIT_REPO").unwrap_or_else(|_| "unknown".into());
-    let identity = std::env::var("OPENGIT_IDENTITY").unwrap_or_else(|_| "unknown".into());
+    let policy_path =
+        std::env::var("OPENGIT_POLICY").unwrap_or_else(|_| "config/policies.yaml".into());
+    let repo_path = std::env::var("OPENGIT_REPO_PATH").unwrap_or_else(|_| ".".into());
 
-    let policy_engine = PolicyEngine::new();
-    let audit_log = AuditLog::new();
-    let pipeline = HookPipeline::new(policy_engine, audit_log);
-
-    let ctx = HookContext {
-        repo,
-        identity,
-        hook_type: HookType::Update,
-        env: Default::default(),
+    let engine = match opengit_core::PolicyEngine::from_file(&PathBuf::from(&policy_path)) {
+        Ok(e) => e,
+        Err(_) => opengit_core::PolicyEngine::new(),
     };
 
-    let update = RefUpdate {
-        ref_name: ref_name.clone(),
-        old_sha: old_sha.clone(),
-        new_sha: new_sha.clone(),
-    };
+    let result = engine.evaluate_push_with_repo(
+        &repo,
+        &identity,
+        ref_name,
+        old_sha,
+        new_sha,
+        &PathBuf::from(&repo_path),
+    );
 
-    let result = pipeline.process_update(&ctx, &update);
-
-    if !result.allowed {
-        eprintln!("{}", result.message);
+    if !result.is_allowed() {
+        let action_str = format!("{:?}", result.action);
+        eprintln!(
+            "DRAGON_FIREWALL: DENIED — {} on {} by {} — {}",
+            action_str,
+            ref_name,
+            identity,
+            result.reason.as_deref().unwrap_or("policy denied"),
+        );
         std::process::exit(1);
     }
-
-    std::process::exit(0);
 }

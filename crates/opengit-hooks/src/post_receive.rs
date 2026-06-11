@@ -1,27 +1,24 @@
-//! Post-receive hook — Logging and notifications
+//! Post-receive hook — Log and notify after a successful push
 //!
-//! Installed as: repo.git/hooks/post-receive
-//! Reads stdin: <old-sha> <new-sha> <ref-name>\n
-//! Always exits 0 (non-blocking)
+//! Called after all refs have been updated successfully.
+//! Used for audit logging and webhook notifications.
 
-use opengit_core::hook::HookPipeline;
-use std::io::{self, Read};
+use std::io::{self, BufRead};
 
 fn main() {
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input).unwrap_or_default();
+    let identity = std::env::var("OPENGIT_IDENTITY").unwrap_or_else(|_| "anonymous".into());
 
-    let updates = HookPipeline::parse_pre_receive_input(&input);
-
-    // Log accepted push
-    for update in &updates {
-        eprintln!(
-            "✅ Accepted push: {} ({} -> {})",
-            update.ref_name,
-            &update.old_sha[..7.min(update.old_sha.len())],
-            &update.new_sha[..7.min(update.new_sha.len())]
-        );
+    let stdin = io::stdin();
+    for line in stdin.lock().lines().map_while(Result::ok) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 3 {
+            eprintln!(
+                "🐉 OpenGit: {} pushed {} → {} on {}",
+                identity,
+                &parts[0][..7.min(parts[0].len())],
+                &parts[1][..7.min(parts[1].len())],
+                parts[2],
+            );
+        }
     }
-
-    std::process::exit(0);
 }
