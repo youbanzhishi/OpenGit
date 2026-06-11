@@ -161,9 +161,7 @@ enum WebhookActions {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter("og=debug")
-        .init();
+    tracing_subscriber::fmt().with_env_filter("og=debug").init();
 
     let cli = Cli::parse();
     let client = ApiClient::new(&cli.server, cli.token.as_deref());
@@ -206,7 +204,13 @@ async fn main() -> Result<()> {
                 if identities.is_empty() {
                     println!("No identities found.");
                 } else {
-                    println!("{:<20} {:<10} {:<20} {}", "NAME", "KIND", "DISPLAY", "TOKENS");
+                    println!(
+                        "{:<20} {:<10} {:<20} {}",
+                        "NAME",
+                        "KIND",
+                        "DISPLAY",
+                        "TOKENS"
+                    );
                     for i in &identities {
                         println!(
                             "{:<20} {:<10} {:<20} {}",
@@ -299,7 +303,7 @@ async fn main() -> Result<()> {
                     action,
                     repo,
                     result.permission,
-                    result
+result
                         .reason
                         .map(|r| format!(" ({})", r))
                         .unwrap_or_default()
@@ -362,7 +366,10 @@ async fn main() -> Result<()> {
                 secret,
                 events,
             } => {
-                let event_list: Vec<String> = events.split(',').map(|s| s.trim().to_string()).collect();
+                let event_list: Vec<String> = events
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect();
                 client.add_webhook(&url, secret.as_deref(), &event_list).await?;
                 println!("✅ Added webhook: {}", url);
             }

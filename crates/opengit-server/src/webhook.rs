@@ -194,10 +194,12 @@ pub async fn deliver_for_refs(
 ) -> u32 {
     let mut sent = 0u32;
     for update in ref_updates {
-        let event = match WebhookEvent::from_ref_update(&update.ref_name, &update.old_sha, &update.new_sha) {
-            Some(e) => e,
-            None => continue,
-        };
+        let event =
+            match WebhookEvent::from_ref_update(&update.ref_name, &update.old_sha, &update.new_sha)
+            {
+                Some(e) => e,
+                None => continue,
+            };
 
         let event_name = match event {
             WebhookEvent::Push => "push",
@@ -317,7 +319,11 @@ mod tests {
         );
         // Tag push
         assert_eq!(
-            WebhookEvent::from_ref_update("refs/tags/v1.0", "0000000000000000000000000000000000000000", "abc123"),
+            WebhookEvent::from_ref_update(
+                "refs/tags/v1.0",
+                "0000000000000000000000000000000000000000",
+                "abc123"
+            ),
             Some(WebhookEvent::Tag)
         );
     }

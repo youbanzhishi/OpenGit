@@ -427,7 +427,10 @@ fn parse_ref_updates_from_pack(body: &[u8]) -> Vec<RefUpdate> {
     }
 
     if !updates.is_empty() {
-        debug!("Parsed {} ref updates from receive-pack request", updates.len());
+        debug!(
+            "Parsed {} ref updates from receive-pack request",
+            updates.len()
+        );
     }
 
     updates
@@ -443,7 +446,10 @@ mod tests {
         // Format: pkt-line with "old_sha new_sha refs/heads/master\0capabilities"
         let old_sha = "abc1230000000000000000000000000000000000";
         let new_sha = "def4560000000000000000000000000000000000";
-        let cmd = format!("{} {} refs/heads/master\0report-status side-band-6k", old_sha, new_sha);
+        let cmd = format!(
+            "{} {} refs/heads/master\0report-status side-band-6k",
+            old_sha, new_sha
+        );
         let len = cmd.len() + 4;
         let pkt_line = format!("{:04x}{}", len, cmd);
         let flush = "0000";
