@@ -1,4 +1,6 @@
-//! OpenGit Server — Lightweight private Git service
+//! OpenGit Server — Lightweight private Git service, agent-first
+//!
+//! P2: Streaming Smart HTTP, persistent state, webhooks, stats, auth-protected API.
 
 use anyhow::Result;
 use clap::Parser;
@@ -8,6 +10,8 @@ mod api;
 mod config;
 mod middleware;
 mod smart_http;
+mod stats;
+mod webhook;
 
 use config::ServerConfig;
 
@@ -45,8 +49,12 @@ async fn main() -> Result<()> {
     let config = ServerConfig::load(&cli)?;
 
     tracing::info!("🐉 OpenGit starting...");
-    tracing::info!("   Repos: {}", config.repos_dir.display());
-    tracing::info!("   Bind:  {}", config.bind);
+    tracing::info!("   Repos:    {}", config.repos_dir.display());
+    tracing::info!("   Bind:     {}", config.bind);
+    tracing::info!("   Policy:   {}", config.policy_file.display());
+    tracing::info!("   Identity: {}", config.identity_file.display());
+    tracing::info!("   Webhook:  {}", config.webhook_file.display());
+    tracing::info!("   Audit:    {}", config.audit_file.display());
 
     let app = api::build_router(&config)?;
 

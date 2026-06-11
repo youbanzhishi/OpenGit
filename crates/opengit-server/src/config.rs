@@ -1,4 +1,6 @@
 //! Server configuration
+//!
+//! P2: Added webhook file path configuration.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -16,6 +18,8 @@ pub struct ServerConfig {
     pub identity_file: PathBuf,
     /// Audit log file path
     pub audit_file: PathBuf,
+    /// Webhook config file path
+    pub webhook_file: PathBuf,
 }
 
 impl ServerConfig {
@@ -52,6 +56,7 @@ impl ServerConfig {
             policy_file: PathBuf::from("config/policies.yaml"),
             identity_file: PathBuf::from("config/identities.yaml"),
             audit_file: PathBuf::from("data/audit.json"),
+            webhook_file: PathBuf::from("config/webhooks.yaml"),
         }
     }
 }

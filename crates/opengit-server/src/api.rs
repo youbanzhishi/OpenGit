@@ -1,29 +1,37 @@
-//! REST API — Repository management, policy, and identity endpoints
+//! REST API — Repository management, policy, identity, webhook, and stats endpoints
+//!
+//! P2: RwLock-based mutable state, persistence, auth-protected API,
+//!     working identity/policy mutations, webhook management, stats.
 
 use axum::{
     extract::{Extension, Path, State},
     http::StatusCode,
     middleware,
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use opengit_core::{
     audit::AuditLog,
     identity::{Identity, IdentityStore},
-    policy::{Action, EvalResult, Policy, PolicyEngine},
+    policy::{Action, EvalResult, Policy, PolicyEngine, PolicyRule},
     repository::Repository,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use crate::config::ServerConfig;
-use crate::middleware::{smart_http_auth, IdentityName};
+use crate::middleware::{require_auth, smart_http_auth, IdentityName};
+use crate::stats::ServerStats;
+use crate::webhook::WebhookConfig;
 
 pub struct AppState {
     pub config: ServerConfig,
-    pub policy_engine: PolicyEngine,
-    pub identity_store: IdentityStore,
+    pub policy_engine: RwLock<PolicyEngine>,
+    pub identity_store: RwLock<IdentityStore>,
     pub audit_log: AuditLog,
+    pub webhooks: RwLock<Vec<WebhookConfig>>,
+    pub stats: ServerStats,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -45,15 +53,29 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         store
     };
 
+    let webhooks = if config.webhook_file.exists() {
+        let content = std::fs::read_to_string(&config.webhook_file).unwrap_or_default();
+        serde_yaml::from_str(&content).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    let audit_log = if !config.audit_file.to_string_lossy().is_empty() {
+        AuditLog::with_file(&config.audit_file)
+    } else {
+        AuditLog::new()
+    };
+
     let state = Arc::new(AppState {
         config: config.clone(),
-        policy_engine,
-        identity_store,
-        audit_log: AuditLog::new(),
+        policy_engine: RwLock::new(policy_engine),
+        identity_store: RwLock::new(identity_store),
+        audit_log,
+        webhooks: RwLock::new(webhooks),
+        stats: ServerStats::new(),
     });
 
-    // Smart HTTP routes — with auth middleware
-    // Default identity for anonymous access
+    // Smart HTTP routes — with optional auth middleware
     let default_identity = IdentityName("anonymous".into());
     let smart_http = Router::new()
         .route("/{repo}/info/refs", get(crate::smart_http::info_refs))
@@ -71,27 +93,33 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
             smart_http_auth,
         ));
 
-    let app = Router::new()
-        // Health check (no auth)
-        .route("/health", get(health))
-        // REST API (no auth for P1 — add require_auth when needed)
-        .route("/api/repos", get(list_repos).post(create_repo))
-        .route("/api/repos/{name}", get(get_repo).delete(delete_repo))
-        .route("/api/repos/{name}/refs", get(get_repo_refs))
-        .route("/api/repos/{name}/reflog/{ref_name}", get(get_repo_reflog))
-        .route("/api/policy/eval", post(eval_policy))
+    // REST API routes — with auth middleware
+    let api_routes = Router::new()
+        .route("/repos", get(list_repos).post(create_repo))
+        .route("/repos/{name}", get(get_repo).delete(delete_repo))
+        .route("/repos/{name}/refs", get(get_repo_refs))
+        .route("/repos/{name}/reflog/{ref_name}", get(get_repo_reflog))
+        .route("/policy/eval", post(eval_policy))
         .route(
-            "/api/policy/rules",
+            "/policy/rules",
             get(list_policy_rules).post(add_policy_rule),
         )
+        .route("/identities", get(list_identities).post(register_identity))
+        .route("/identities/{name}/tokens", post(generate_token))
         .route(
-            "/api/identities",
-            get(list_identities).post(register_identity),
+            "/identities/{name}",
+            get(get_identity).delete(delete_identity),
         )
-        .route("/api/identities/{name}/tokens", post(generate_token))
-        .route("/api/audit", get(get_audit))
-        .route("/api/audit/denied", get(get_denied_audit))
-        // Merge Smart HTTP
+        .route("/audit", get(get_audit))
+        .route("/audit/denied", get(get_denied_audit))
+        .route("/webhooks", get(list_webhooks).post(add_webhook))
+        .route("/webhooks/{idx}", delete(delete_webhook))
+        .route("/stats", get(get_stats))
+        .layer(middleware::from_fn_with_state(state.clone(), require_auth));
+
+    let app = Router::new()
+        .route("/health", get(health))
+        .nest("/api", api_routes)
         .merge(smart_http)
         .with_state(state);
 
@@ -122,19 +150,39 @@ async fn list_repos(State(state): State<SharedState>) -> Result<Json<Vec<RepoInf
 
 async fn create_repo(
     State(state): State<SharedState>,
+    Extension(identity): Extension<IdentityName>,
     Json(req): Json<CreateRepoRequest>,
 ) -> Result<Json<RepoInfo>, StatusCode> {
+    // Check Admin permission
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate(&req.name, &identity.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
     let repo = Repository::create(&state.config.repos_dir, &req.name).map_err(|e| {
         tracing::error!("Failed to create repo: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    // Install hooks if storage manager is available
+    // Install hooks
     if let Err(e) = install_hooks(&repo.path) {
         tracing::warn!("Failed to install hooks for {}: {}", req.name, e);
     }
 
-    tracing::info!("Created repo: {}", req.name);
+    state.audit_log.log(opengit_core::audit::AuditEntry {
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        repo: req.name.clone(),
+        identity: identity.0.clone(),
+        action: "CreateRepo".into(),
+        ref_name: None,
+        allowed: true,
+        reason: None,
+    });
+
+    tracing::info!("Created repo: {} by {}", req.name, identity.0);
     Ok(Json(RepoInfo {
         name: repo.name,
         path: repo.path.to_string_lossy().to_string(),
@@ -159,7 +207,26 @@ async fn get_repo(
 async fn delete_repo(
     Path(name): Path<String>,
     State(state): State<SharedState>,
+    Extension(identity): Extension<IdentityName>,
 ) -> Result<StatusCode, StatusCode> {
+    // Check DeleteRepo permission
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate(&name, &identity.0, Action::DeleteRepo);
+        if !result.is_allowed() {
+            state.audit_log.log(opengit_core::audit::AuditEntry {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                repo: name.clone(),
+                identity: identity.0.clone(),
+                action: "DeleteRepo".into(),
+                ref_name: None,
+                allowed: false,
+                reason: result.reason.clone(),
+            });
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
     let repo_path = state.config.repos_dir.join(format!("{}.git", name));
     if !repo_path.exists() {
         return Err(StatusCode::NOT_FOUND);
@@ -175,7 +242,22 @@ async fn delete_repo(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    tracing::info!("Moved repo {} to trash: {}", name, trash_path.display());
+    state.audit_log.log(opengit_core::audit::AuditEntry {
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        repo: name.clone(),
+        identity: identity.0.clone(),
+        action: "DeleteRepo".into(),
+        ref_name: None,
+        allowed: true,
+        reason: Some(format!("Moved to trash: {}", trash_path.display())),
+    });
+
+    tracing::info!(
+        "Moved repo {} to trash: {} by {}",
+        name,
+        trash_path.display(),
+        identity.0
+    );
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -226,7 +308,8 @@ fn install_hooks(repo_path: &std::path::Path) -> Result<(), anyhow::Error> {
     let hooks_dir = repo_path.join("hooks");
     std::fs::create_dir_all(&hooks_dir)?;
 
-    // Pre-receive hook — calls opengit-pre-receive binary
+    // Pre-receive hook — calls opengit-pre-receive binary if available,
+    // falls back to shell script that blocks branch deletion for agents
     let pre_receive = r#"#!/bin/sh
 # OpenGit pre-receive hook
 # Reads OPENGIT_IDENTITY from environment (set by Smart HTTP server)
@@ -235,17 +318,21 @@ fn install_hooks(repo_path: &std::path::Path) -> Result<(), anyhow::Error> {
 IDENTITY="${OPENGIT_IDENTITY:-anonymous}"
 REPO="${OPENGIT_REPO:-unknown}"
 
+# Try opengit-pre-receive binary first
+if command -v opengit-pre-receive >/dev/null 2>&1; then
+    exec opengit-pre-receive
+fi
+
+# Fallback: block branch deletion for agents
 while read old_sha new_sha ref_name; do
-    # Skip zero SHAs for new branch creation
     if [ "$new_sha" = "0000000000000000000000000000000000000000" ]; then
-        echo "DRAGON_FIREWALL: DENIED - Deleting branch $ref_name is not allowed for $IDENTITY" >&2
+        echo "DRAGON_FIREWALL: DENIED - Deleting $ref_name is not allowed for $IDENTITY" >&2
         exit 1
     fi
 done
 "#;
     std::fs::write(hooks_dir.join("pre-receive"), pre_receive)?;
 
-    // Make executable
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -262,37 +349,103 @@ async fn eval_policy(
     State(state): State<SharedState>,
     Json(req): Json<EvalRequest>,
 ) -> Json<EvalResult> {
-    let result = state
-        .policy_engine
-        .evaluate(&req.repo, &req.identity, req.action);
+    let engine = state.policy_engine.read().await;
+    let result = engine.evaluate(&req.repo, &req.identity, req.action);
     Json(result)
 }
 
-async fn list_policy_rules(State(_state): State<SharedState>) -> Json<Vec<PolicyRuleInfo>> {
-    // Return the default policy rules
-    let default = Policy::new("*");
-    let rules: Vec<PolicyRuleInfo> = default
-        .rules
-        .iter()
-        .map(|r| PolicyRuleInfo {
-            identity: r.identity.clone(),
-            action: format!("{:?}", r.action).to_kebab_case(),
-            permission: format!("{:?}", r.permission).to_kebab_case(),
-            reason: r.reason.clone(),
-        })
-        .collect();
-    Json(rules)
+async fn list_policy_rules(State(state): State<SharedState>) -> Json<Value> {
+    let engine = state.policy_engine.read().await;
+
+    let mut custom: Vec<PolicyRuleInfo> = Vec::new();
+    for policy in engine.custom_policies() {
+        for rule in &policy.rules {
+            custom.push(PolicyRuleInfo {
+                repo: policy.repo.clone(),
+                identity: rule.identity.clone(),
+                action: format!("{:?}", rule.action).to_kebab_case(),
+                permission: format!("{:?}", rule.permission).to_kebab_case(),
+                reason: rule.reason.clone(),
+            });
+        }
+    }
+
+    let mut default: Vec<PolicyRuleInfo> = Vec::new();
+    for rule in &engine.default_policy().rules {
+        default.push(PolicyRuleInfo {
+            repo: "*".into(),
+            identity: rule.identity.clone(),
+            action: format!("{:?}", rule.action).to_kebab_case(),
+            permission: format!("{:?}", rule.permission).to_kebab_case(),
+            reason: rule.reason.clone(),
+        });
+    }
+
+    Json(serde_json::json!({
+        "custom_policies": custom,
+        "default_policy": default,
+    }))
 }
 
 async fn add_policy_rule(
-    State(_state): State<SharedState>,
+    State(state): State<SharedState>,
+    Extension(identity): Extension<IdentityName>,
     Json(req): Json<AddPolicyRuleRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    // For P1, just log the request — full dynamic policy management is P2
+    // Only admins can add policy rules
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &identity.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    let action: Action = parse_action(&req.action).ok_or(StatusCode::BAD_REQUEST)?;
+    let permission: opengit_core::policy::Permission =
+        parse_permission(&req.permission).ok_or(StatusCode::BAD_REQUEST)?;
+
+    let rule = PolicyRule {
+        identity: req.identity.clone(),
+        action,
+        permission,
+        reason: req.reason.clone(),
+    };
+
+    {
+        let mut engine = state.policy_engine.write().await;
+        // Find matching policy or create a new one
+        let repo_pattern = req.repo.as_deref().unwrap_or("*");
+        let found = engine
+            .custom_policies()
+            .iter()
+            .any(|p| p.repo == repo_pattern);
+        if found {
+            // Add rule to existing policy
+            // We need to do this through the engine directly
+            for policy in engine.custom_policies_mut() {
+                if policy.repo == repo_pattern {
+                    policy.add_rule(rule);
+                    break;
+                }
+            }
+        } else {
+            let mut policy = Policy::new(repo_pattern);
+            policy.add_rule(rule);
+            engine.add_policy(policy);
+        }
+
+        // Persist
+        if let Err(e) = engine.save_to_file(&state.config.policy_file) {
+            tracing::error!("Failed to save policy file: {}", e);
+        }
+    }
+
     tracing::info!(
-        "Policy rule addition requested: identity={} action={}",
+        "Policy rule added by {}: {} -> {}",
+        identity.0,
         req.identity,
-        req.action,
+        req.action
     );
     Ok(StatusCode::CREATED)
 }
@@ -300,16 +453,13 @@ async fn add_policy_rule(
 // ─── Identity endpoints ─────────────────────────────────────────────
 
 async fn list_identities(State(state): State<SharedState>) -> Json<Vec<IdentityInfo>> {
-    let identities = state.identity_store.list();
+    let store = state.identity_store.read().await;
+    let identities = store.list();
     let infos: Vec<IdentityInfo> = identities
         .iter()
         .map(|i| IdentityInfo {
             name: i.name.clone(),
-            kind: if i.is_agent() {
-                "agent".into()
-            } else {
-                "human".into()
-            },
+            kind: if i.is_agent() { "agent" } else { "human" }.into(),
             display_name: i.display_name.clone(),
             token_count: i.tokens.len(),
         })
@@ -317,15 +467,48 @@ async fn list_identities(State(state): State<SharedState>) -> Json<Vec<IdentityI
     Json(infos)
 }
 
+async fn get_identity(
+    Path(name): Path<String>,
+    State(state): State<SharedState>,
+) -> Result<Json<IdentityInfo>, StatusCode> {
+    let store = state.identity_store.read().await;
+    let identity = store.find(&name).ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(IdentityInfo {
+        name: identity.name.clone(),
+        kind: if identity.is_agent() {
+            "agent"
+        } else {
+            "human"
+        }
+        .into(),
+        display_name: identity.display_name.clone(),
+        token_count: identity.tokens.len(),
+    }))
+}
+
 async fn register_identity(
-    State(_state): State<SharedState>,
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
     Json(req): Json<RegisterIdentityRequest>,
 ) -> Result<Json<IdentityInfo>, StatusCode> {
-    let identity = match req.kind.as_str() {
+    // Only admins can register identities
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    let mut identity = match req.kind.as_str() {
         "agent" => Identity::agent(&req.name),
         "human" => Identity::human(&req.name),
         _ => return Err(StatusCode::BAD_REQUEST),
     };
+
+    if let Some(display_name) = &req.display_name {
+        identity = identity.with_display_name(display_name);
+    }
 
     let info = IdentityInfo {
         name: identity.name.clone(),
@@ -334,39 +517,212 @@ async fn register_identity(
         token_count: identity.tokens.len(),
     };
 
-    // Note: need mutable borrow, but state is Arc — for P1 just log
-    tracing::info!("Identity registration requested: {}", req.name);
+    {
+        let mut store = state.identity_store.write().await;
+        store.register(identity);
+        // Persist
+        if let Err(e) = store.save_to_file(&state.config.identity_file) {
+            tracing::error!("Failed to save identity file: {}", e);
+        }
+    }
+
+    state.audit_log.log(opengit_core::audit::AuditEntry {
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        repo: "*".into(),
+        identity: caller.0.clone(),
+        action: "RegisterIdentity".into(),
+        ref_name: None,
+        allowed: true,
+        reason: Some(format!("Registered {} ({})", info.name, info.kind)),
+    });
+
+    tracing::info!(
+        "Identity registered: {} ({}) by {}",
+        req.name,
+        req.kind,
+        caller.0
+    );
     Ok(Json(info))
 }
 
 async fn generate_token(
     Path(name): Path<String>,
     State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+    Json(req): Json<GenerateTokenRequest>,
 ) -> Result<Json<GenerateTokenResponse>, StatusCode> {
-    let _identity = state
-        .identity_store
-        .find(&name)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    // Only admins can generate tokens for others, or self-service
+    let is_self = caller.0 == name;
+    if !is_self {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
 
-    // For P1, we can't mutate the Arc easily — return instruction
-    // Full token generation with persistence is P2
-    tracing::info!("Token generation requested for: {}", name);
+    let secret = {
+        let mut store = state.identity_store.write().await;
+        let identity = store.find_mut(&name).ok_or(StatusCode::NOT_FOUND)?;
+        let secret = identity.generate_token(&req.label);
+        // Persist
+        if let Err(e) = store.save_to_file(&state.config.identity_file) {
+            tracing::error!("Failed to save identity file: {}", e);
+        }
+        secret
+    };
+
+    state.audit_log.log(opengit_core::audit::AuditEntry {
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        repo: "*".into(),
+        identity: caller.0.clone(),
+        action: "GenerateToken".into(),
+        ref_name: None,
+        allowed: true,
+        reason: Some(format!("Token '{}' generated for {}", req.label, name)),
+    });
+
+    tracing::info!("Token generated for {} by {}", name, caller.0);
     Ok(Json(GenerateTokenResponse {
         identity: name,
-        message: "Token generation requires server restart to take effect in P1".into(),
+        token: secret,
+        label: req.label,
     }))
+}
+
+async fn delete_identity(
+    Path(name): Path<String>,
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+) -> Result<StatusCode, StatusCode> {
+    // Only admins can delete identities
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    {
+        let mut store = state.identity_store.write().await;
+        if store.find(&name).is_none() {
+            return Err(StatusCode::NOT_FOUND);
+        }
+        store.remove(&name);
+        if let Err(e) = store.save_to_file(&state.config.identity_file) {
+            tracing::error!("Failed to save identity file: {}", e);
+        }
+    }
+
+    state.audit_log.log(opengit_core::audit::AuditEntry {
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        repo: "*".into(),
+        identity: caller.0.clone(),
+        action: "DeleteIdentity".into(),
+        ref_name: None,
+        allowed: true,
+        reason: Some(format!("Deleted identity {}", name)),
+    });
+
+    tracing::info!("Identity deleted: {} by {}", name, caller.0);
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ─── Audit endpoints ────────────────────────────────────────────────
 
 async fn get_audit(State(state): State<SharedState>) -> Json<Vec<opengit_core::audit::AuditEntry>> {
-    Json(state.audit_log.entries())
+    Json(state.audit_log.recent(100))
 }
 
 async fn get_denied_audit(
     State(state): State<SharedState>,
 ) -> Json<Vec<opengit_core::audit::AuditEntry>> {
     Json(state.audit_log.denied_entries())
+}
+
+// ─── Webhook endpoints ──────────────────────────────────────────────
+
+async fn list_webhooks(State(state): State<SharedState>) -> Json<Vec<WebhookConfig>> {
+    let webhooks = state.webhooks.read().await;
+    Json(webhooks.clone())
+}
+
+async fn add_webhook(
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+    Json(req): Json<AddWebhookRequest>,
+) -> Result<StatusCode, StatusCode> {
+    // Only admins can add webhooks
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    {
+        let mut webhooks = state.webhooks.write().await;
+        webhooks.push(req.into_config());
+        // Persist
+        if let Ok(content) = serde_yaml::to_string(&*webhooks) {
+            if let Some(parent) = state.config.webhook_file.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::write(&state.config.webhook_file, content);
+        }
+    }
+
+    tracing::info!("Webhook added by {}", caller.0);
+    Ok(StatusCode::CREATED)
+}
+
+async fn delete_webhook(
+    Path(idx): Path<usize>,
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+) -> Result<StatusCode, StatusCode> {
+    // Only admins can delete webhooks
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    {
+        let mut webhooks = state.webhooks.write().await;
+        if idx >= webhooks.len() {
+            return Err(StatusCode::NOT_FOUND);
+        }
+        webhooks.remove(idx);
+        // Persist
+        if let Ok(content) = serde_yaml::to_string(&*webhooks) {
+            let _ = std::fs::write(&state.config.webhook_file, content);
+        }
+    }
+
+    tracing::info!("Webhook {} deleted by {}", idx, caller.0);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ─── Stats endpoint ─────────────────────────────────────────────────
+
+async fn get_stats(State(state): State<SharedState>) -> Json<serde_json::Value> {
+    let total_repos = Repository::scan_dir(&state.config.repos_dir)
+        .map(|r| r.len())
+        .unwrap_or(0);
+    let snapshot = state.stats.snapshot();
+    Json(serde_json::json!({
+        "total_repos": total_repos,
+        "total_pushes": snapshot.total_pushes,
+        "total_clones": snapshot.total_clones,
+        "total_denials": snapshot.total_denials,
+        "total_webhooks_sent": snapshot.total_webhooks_sent,
+        "uptime_seconds": snapshot.uptime_seconds,
+    }))
 }
 
 // ─── Data types ─────────────────────────────────────────────────────
@@ -389,6 +745,33 @@ impl ToKebabCase for &str {
             }
         }
         result
+    }
+}
+
+fn parse_action(s: &str) -> Option<Action> {
+    match s.to_lowercase().replace('-', "_").as_str() {
+        "push" => Some(Action::Push),
+        "force_push" | "forcepush" => Some(Action::ForcePush),
+        "delete_branch" | "deletebranch" => Some(Action::DeleteBranch),
+        "delete_repo" | "deleterepo" => Some(Action::DeleteRepo),
+        "tag" => Some(Action::Tag),
+        "merge" => Some(Action::Merge),
+        "reset_staging" | "resetstaging" => Some(Action::ResetStaging),
+        "add_all" | "addall" => Some(Action::AddAll),
+        "stash" => Some(Action::Stash),
+        "admin" => Some(Action::Admin),
+        "read" => Some(Action::Read),
+        _ => None,
+    }
+}
+
+fn parse_permission(s: &str) -> Option<opengit_core::policy::Permission> {
+    match s.to_lowercase().replace('-', "_").as_str() {
+        "allow" => Some(opengit_core::policy::Permission::Allow),
+        "deny" => Some(opengit_core::policy::Permission::Deny),
+        "confirm" => Some(opengit_core::policy::Permission::Confirm),
+        "audit_log" | "auditlog" => Some(opengit_core::policy::Permission::AuditLog),
+        _ => None,
     }
 }
 
@@ -427,6 +810,7 @@ pub struct EvalRequest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolicyRuleInfo {
+    pub repo: String,
     pub identity: String,
     pub action: String,
     pub permission: String,
@@ -435,6 +819,7 @@ pub struct PolicyRuleInfo {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AddPolicyRuleRequest {
+    pub repo: Option<String>,
     pub identity: String,
     pub action: String,
     pub permission: String,
@@ -453,10 +838,58 @@ pub struct IdentityInfo {
 pub struct RegisterIdentityRequest {
     pub name: String,
     pub kind: String,
+    pub display_name: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GenerateTokenRequest {
+    pub label: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GenerateTokenResponse {
     pub identity: String,
-    pub message: String,
+    pub token: String,
+    pub label: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AddWebhookRequest {
+    pub url: String,
+    pub secret: Option<String>,
+    pub events: Option<Vec<String>>,
+}
+
+impl AddWebhookRequest {
+    pub fn into_config(self) -> WebhookConfig {
+        use crate::webhook::WebhookEvent;
+        let events = self
+            .events
+            .map(|evts| {
+                evts.iter()
+                    .filter_map(|e| match e.as_str() {
+                        "push" => Some(WebhookEvent::Push),
+                        "tag" => Some(WebhookEvent::Tag),
+                        "delete-branch" => Some(WebhookEvent::DeleteBranch),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_else(|| {
+                vec![
+                    WebhookEvent::Push,
+                    WebhookEvent::Tag,
+                    WebhookEvent::DeleteBranch,
+                ]
+            });
+
+        WebhookConfig {
+            url: self.url,
+            secret: self.secret,
+            events,
+            active: true,
+        }
+    }
+}
+
+use serde_json::Value;

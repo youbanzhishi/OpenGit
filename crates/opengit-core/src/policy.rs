@@ -3,6 +3,8 @@
 //! Every Git action is evaluated against a policy before execution.
 //! Policies are defined per-repo × per-identity, with sensible defaults
 //! that match real-world agent safety requirements.
+//!
+//! P2: Supports runtime modification and file persistence.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -253,9 +255,43 @@ impl PolicyEngine {
         Ok(engine)
     }
 
+    /// Save policies to a YAML file (P2: persistence)
+    pub fn save_to_file(&self, path: &Path) -> Result<()> {
+        #[derive(Serialize)]
+        struct PolicyConfigFile {
+            policies: Vec<Policy>,
+        }
+        let config = PolicyConfigFile {
+            policies: self.policies.clone(),
+        };
+        let content =
+            serde_yaml::to_string(&config).with_context(|| "Failed to serialize policy config")?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, content)
+            .with_context(|| format!("Failed to write policy file: {}", path.display()))?;
+        Ok(())
+    }
+
     /// Add a policy to the engine
     pub fn add_policy(&mut self, policy: Policy) {
         self.policies.push(policy);
+    }
+
+    /// Get all custom policies (for listing)
+    pub fn custom_policies(&self) -> &[Policy] {
+        &self.policies
+    }
+
+    /// Get mutable reference to custom policies (for runtime modification)
+    pub fn custom_policies_mut(&mut self) -> &mut Vec<Policy> {
+        &mut self.policies
+    }
+
+    /// Get the default policy (for listing)
+    pub fn default_policy(&self) -> &Policy {
+        &self.default_policy
     }
 
     /// Evaluate whether an identity can perform an action on a repo
@@ -576,5 +612,35 @@ mod tests {
             classify_push_action("refs/heads/master", "abc123", "def456"),
             Action::Push
         );
+    }
+
+    #[test]
+    fn test_policy_persistence() {
+        let dir = std::env::temp_dir().join("opengit_policy_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let path = dir.join("policies.yaml");
+
+        // Create and save
+        {
+            let mut engine = PolicyEngine::new();
+            let mut policy = Policy::new("my-repo");
+            policy.add_rule(PolicyRule {
+                identity: "agent-special".into(),
+                action: Action::ForcePush,
+                permission: Permission::Allow,
+                reason: Some("Special exception".into()),
+            });
+            engine.add_policy(policy);
+            engine.save_to_file(&path).unwrap();
+        }
+
+        // Load and verify
+        let engine = PolicyEngine::from_file(&path).unwrap();
+        let result = engine.evaluate("my-repo", "agent-special", Action::ForcePush);
+        assert!(result.is_allowed());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

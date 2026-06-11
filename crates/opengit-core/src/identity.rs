@@ -1,4 +1,6 @@
 //! Identity — Agent and Human identity with authentication
+//!
+//! P2: Added find_mut() and remove() for runtime mutations.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -172,6 +174,9 @@ impl IdentityStore {
     pub fn save_to_file(&self, path: &Path) -> Result<()> {
         let content =
             serde_yaml::to_string(self).with_context(|| "Failed to serialize identity store")?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         std::fs::write(path, content)
             .with_context(|| format!("Failed to write identity file: {}", path.display()))?;
         Ok(())
@@ -185,6 +190,16 @@ impl IdentityStore {
     /// Find an identity by name
     pub fn find(&self, name: &str) -> Option<&Identity> {
         self.identities.get(name)
+    }
+
+    /// Find a mutable reference to an identity by name
+    pub fn find_mut(&mut self, name: &str) -> Option<&mut Identity> {
+        self.identities.get_mut(name)
+    }
+
+    /// Remove an identity by name
+    pub fn remove(&mut self, name: &str) -> Option<Identity> {
+        self.identities.remove(name)
     }
 
     /// Find an identity by token
@@ -254,5 +269,50 @@ mod tests {
 
         agent.tokens[0].revoke();
         assert!(!agent.verify_token(&secret));
+    }
+
+    #[test]
+    fn test_identity_store_mutations() {
+        let mut store = IdentityStore::new();
+
+        let mut agent = Identity::agent("test");
+        agent.generate_token("key");
+        store.register(agent);
+
+        // Find mutable
+        let found = store.find_mut("agent-test");
+        assert!(found.is_some());
+        let found = found.unwrap();
+        found.generate_token("second-key");
+
+        assert_eq!(store.find("agent-test").unwrap().tokens.len(), 2);
+
+        // Remove
+        let removed = store.remove("agent-test");
+        assert!(removed.is_some());
+        assert!(store.find("agent-test").is_none());
+    }
+
+    #[test]
+    fn test_identity_persistence() {
+        let dir = std::env::temp_dir().join("opengit_identity_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let path = dir.join("identities.yaml");
+
+        {
+            let mut store = IdentityStore::new();
+            let mut agent = Identity::agent("ci");
+            agent.generate_token("deploy");
+            store.register(agent);
+            store.save_to_file(&path).unwrap();
+        }
+
+        // Reload and verify
+        let store = IdentityStore::from_file(&path).unwrap();
+        assert!(store.find("agent-ci").is_some());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
