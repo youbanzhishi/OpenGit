@@ -286,7 +286,9 @@ async fn get_repo_reflog(
     let repo_path = state.config.repos_dir.join(format!("{}.git", name));
     let repo = Repository::open(&repo_path).map_err(|_| StatusCode::NOT_FOUND)?;
 
-    let reflog = repo.reflog(&ref_name).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let reflog = repo
+        .reflog(&ref_name)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let infos: Vec<ReflogEntryInfo> = reflog
         .iter()
         .map(|e| ReflogEntryInfo {
@@ -310,7 +312,9 @@ async fn get_repo_size(
     }
 
     let repo = Repository::open(&repo_path).map_err(|_| StatusCode::NOT_FOUND)?;
-    let size_bytes = repo.size_bytes().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let size_bytes = repo
+        .size_bytes()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(RepoSizeInfo {
         name,
@@ -449,7 +453,10 @@ async fn add_policy_rule(
         let repo = req.repo.as_deref().unwrap_or("*");
 
         // Find or create policy for this repo
-        let found = engine.custom_policies_mut().iter_mut().find(|p| p.repo == repo);
+        let found = engine
+            .custom_policies_mut()
+            .iter_mut()
+            .find(|p| p.repo == repo);
         if let Some(policy) = found {
             policy.add_rule(rule);
         } else {

@@ -16,7 +16,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::api::SharedState;
 use crate::middleware::IdentityName;
-use crate::webhook::{WebhookEvent, WebhookPayload, RefUpdate};
+use crate::webhook::{RefUpdate, WebhookEvent, WebhookPayload};
 
 /// Query parameters for info/refs endpoint
 #[derive(Debug, Deserialize)]

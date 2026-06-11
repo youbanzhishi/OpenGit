@@ -206,10 +206,7 @@ async fn main() -> Result<()> {
                 } else {
                     println!(
                         "{:<20} {:<10} {:<20} {}",
-                        "NAME",
-                        "KIND",
-                        "DISPLAY",
-                        "TOKENS"
+                        "NAME", "KIND", "DISPLAY", "TOKENS"
                     );
                     for i in &identities {
                         println!(
@@ -230,10 +227,7 @@ async fn main() -> Result<()> {
                 let info = client
                     .register_identity(&name, &kind, display_name.as_deref())
                     .await?;
-                println!(
-                    "✅ Registered {} ({})",
-                    info.name, info.kind
-                );
+                println!("✅ Registered {} ({})", info.name, info.kind);
             }
             IdentityActions::Token { name, label } => {
                 let resp = client.generate_token(&name, &label).await?;
@@ -284,7 +278,10 @@ async fn main() -> Result<()> {
                         reason.as_deref(),
                     )
                     .await?;
-                println!("✅ Added policy rule: {} → {} → {}", identity, action, permission);
+                println!(
+                    "✅ Added policy rule: {} → {} → {}",
+                    identity, action, permission
+                );
             }
             PolicyActions::Eval {
                 repo,
@@ -303,7 +300,7 @@ async fn main() -> Result<()> {
                     action,
                     repo,
                     result.permission,
-result
+                    result
                         .reason
                         .map(|r| format!(" ({})", r))
                         .unwrap_or_default()
@@ -366,11 +363,11 @@ result
                 secret,
                 events,
             } => {
-                let event_list: Vec<String> = events
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .collect();
-                client.add_webhook(&url, secret.as_deref(), &event_list).await?;
+                let event_list: Vec<String> =
+                    events.split(',').map(|s| s.trim().to_string()).collect();
+                client
+                    .add_webhook(&url, secret.as_deref(), &event_list)
+                    .await?;
                 println!("✅ Added webhook: {}", url);
             }
             WebhookActions::Delete { idx } => {
@@ -388,12 +385,10 @@ result
             println!("   Webhooks sent:  {}", stats.total_webhooks_sent);
             println!("   Uptime:         {}s", stats.uptime_seconds);
         }
-        Commands::Health => {
-            match client.health().await {
-                Ok(msg) => println!("✅ {}", msg),
-                Err(e) => println!("❌ Server unreachable: {}", e),
-            }
-        }
+        Commands::Health => match client.health().await {
+            Ok(msg) => println!("✅ {}", msg),
+            Err(e) => println!("❌ Server unreachable: {}", e),
+        },
     }
 
     Ok(())
@@ -651,12 +646,7 @@ impl ApiClient {
         Ok(())
     }
 
-    async fn eval_policy(
-        &self,
-        repo: &str,
-        identity: &str,
-        action: &str,
-    ) -> Result<EvalResult> {
+    async fn eval_policy(&self, repo: &str, identity: &str, action: &str) -> Result<EvalResult> {
         self.post_json(
             "/api/policy/eval",
             &serde_json::json!({
@@ -680,12 +670,7 @@ impl ApiClient {
         self.get("/api/webhooks").await
     }
 
-    async fn add_webhook(
-        &self,
-        url: &str,
-        secret: Option<&str>,
-        events: &[String],
-    ) -> Result<()> {
+    async fn add_webhook(&self, url: &str, secret: Option<&str>, events: &[String]) -> Result<()> {
         let mut req = self
             .http
             .post(format!("{}/api/webhooks", self.base_url))
