@@ -203,10 +203,7 @@ async fn main() -> Result<()> {
                 if identities.is_empty() {
                     println!("No identities found.");
                 } else {
-                    println!(
-                        "{:<20} {:<10} {:<20} TOKENS",
-                        "NAME", "KIND", "DISPLAY"
-                    );
+                    println!("{:<20} {:<10} {:<20} TOKENS", "NAME", "KIND", "DISPLAY");
                     for i in &identities {
                         println!(
                             "{:<20} {:<10} {:<20} {}",
