@@ -151,6 +151,7 @@ pub struct IdentityStore {
     identities: HashMap<String, Identity>,
 }
 
+#[allow(clippy::new_without_default)]
 impl IdentityStore {
     pub fn new() -> Self {
         Self {

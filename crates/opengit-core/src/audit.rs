@@ -28,6 +28,7 @@ pub struct AuditLog {
     entries: Mutex<Vec<AuditEntry>>,
 }
 
+#[allow(clippy::new_without_default)]
 impl AuditLog {
     pub fn new() -> Self {
         Self {

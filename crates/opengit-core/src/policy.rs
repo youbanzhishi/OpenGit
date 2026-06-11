@@ -6,7 +6,6 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::Path;
 
 /// Git actions that can be controlled by policy
@@ -230,6 +229,7 @@ pub struct PolicyEngine {
     default_policy: Policy,
 }
 
+#[allow(clippy::new_without_default)]
 impl PolicyEngine {
     /// Create a new policy engine with safe defaults
     pub fn new() -> Self {

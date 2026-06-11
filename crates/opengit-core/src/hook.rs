@@ -186,7 +186,7 @@ impl HookPipeline {
             .lines()
             .filter(|l| !l.trim().is_empty())
             .filter_map(|line| {
-                let parts: Vec<&str> = line.trim().split_whitespace().collect();
+                let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 3 {
                     Some(RefUpdate {
                         old_sha: parts[0].into(),
