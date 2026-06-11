@@ -1,0 +1,13 @@
+[package]
+name = "opengit-storage"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+opengit-core = { path = "../opengit-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+git2 = { workspace = true }
+chrono = { workspace = true }

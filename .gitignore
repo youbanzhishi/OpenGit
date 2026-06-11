@@ -1,0 +1,5 @@
+/target
+/repos
+/data
+*.swp
+.DS_Store

@@ -1,0 +1,34 @@
+# OpenGit Identity Store
+
+identities:
+  agent-deploy:
+    name: agent-deploy
+    kind: agent
+    display_name: Deploy Agent
+    description: CI/CD deployment agent
+    tokens: []
+    ssh_keys: []
+
+  agent-dev:
+    name: agent-dev
+    kind: agent
+    display_name: Dev Agent
+    description: Development assistant
+    tokens: []
+    ssh_keys: []
+
+  agent-test:
+    name: agent-test
+    kind: agent
+    display_name: Test Agent
+    description: Testing and QA agent
+    tokens: []
+    ssh_keys: []
+
+  human-admin:
+    name: human-admin
+    kind: human
+    display_name: Admin
+    description: System administrator
+    tokens: []
+    ssh_keys: []

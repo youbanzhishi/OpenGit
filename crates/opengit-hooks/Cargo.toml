@@ -1,0 +1,21 @@
+[package]
+name = "opengit-hooks"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "opengit-pre-receive"
+path = "src/pre_receive.rs"
+
+[[bin]]
+name = "opengit-update"
+path = "src/update.rs"
+
+[[bin]]
+name = "opengit-post-receive"
+path = "src/post_receive.rs"
+
+[dependencies]
+opengit-core = { path = "../opengit-core" }
+anyhow = { workspace = true }
+serde_yaml = { workspace = true }

@@ -1,0 +1,28 @@
+[package]
+name = "opengit-server"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "opengit"
+path = "src/main.rs"
+
+[dependencies]
+opengit-core = { path = "../opengit-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+toml = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+git2 = { workspace = true }
+hex = { workspace = true }
+clap = { version = "4", features = ["derive"] }
