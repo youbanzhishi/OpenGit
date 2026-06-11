@@ -436,7 +436,7 @@ struct PolicyRuleInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EvalResult {
-    permission: String,
+    permission: opengit_core::policy::Permission,
     reason: Option<String>,
 }
 
