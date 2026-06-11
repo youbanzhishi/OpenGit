@@ -396,7 +396,6 @@ fn parse_ref_updates_from_pack(body: &[u8]) -> Vec<RefUpdate> {
 
         if len == 0 {
             // Flush packet — end of commands
-            pos += 4;
             break;
         }
 

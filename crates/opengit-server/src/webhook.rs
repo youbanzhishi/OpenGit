@@ -43,7 +43,7 @@ impl WebhookEvent {
     }
 
     /// Classify a ref update into the matching webhook event
-    pub fn from_ref_update(ref_name: &str, old_sha: &str, new_sha: &str) -> Option<Self> {
+    pub fn from_ref_update(ref_name: &str, _old_sha: &str, new_sha: &str) -> Option<Self> {
         let zero_sha = "0000000000000000000000000000000000000000";
         if new_sha == zero_sha {
             // Deletion
@@ -90,6 +90,7 @@ pub struct RefUpdate {
 impl RefUpdate {
     /// Parse post-receive hook stdin output
     /// Format: `<old-sha> <new-sha> <ref-name>\n`
+    #[allow(dead_code)]
     pub fn parse_stdin(input: &str) -> Vec<Self> {
         input
             .lines()
