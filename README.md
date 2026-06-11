@@ -14,9 +14,14 @@ OpenGit was born from that incident. Every rule in its default policy is a lesso
 - 🤖 **Agent-First Design** — Default safe policies for AI agents; agents can only push by default
 - 👤 **Human-Friendly** — Humans get full control with audit logging on dangerous operations
 - 📦 **Zero Migration** — Reads existing Git bare repos directly, no import needed
-- 🔌 **Unlimited Extension** — Plugin system (WASM planned) for custom workflows
+- 🔌 **Unlimited Extension** — WASM plugin system planned for custom workflows
 - 📊 **Full Audit Trail** — Every Git operation logged with identity, action, and result
 - ⚡ **Lightweight** — Single binary, zero database dependency, pure filesystem
+- 🔗 **Webhooks** — Post-receive notifications with HMAC-SHA256 signatures for CI/CD integration
+- 🖥️ **CLI Tool** — `og` command-line tool for managing your OpenGit server
+- 📡 **Streaming** — Smart HTTP with streaming pack transfer, prevents OOM on large repos
+- 💾 **Persistent State** — Identity, policy, and webhook configs survive server restarts
+- 📈 **Server Stats** — Atomic counters tracking pushes, clones, denials, webhooks, uptime
 
 ## Permission Model
 
@@ -50,28 +55,130 @@ cargo build --release
 git clone http://localhost:9418/my-repo
 ```
 
+## CLI Tool (`og`)
+
+```bash
+# Health check
+og health
+
+# List repos
+og repos
+
+# Create a repo
+og repos --create my-project
+
+# List identities
+og identities list
+
+# Register an agent
+og identities register my-bot --kind agent --display-name "My Bot"
+
+# Generate a token
+og identities token agent-my-bot --label ci-key
+
+# List policy rules
+og policy rules
+
+# Add a policy rule
+og policy add-rule --identity agent-deploy --action push --permission allow
+
+# Evaluate a policy (dry run)
+og policy eval --repo my-project --identity agent-deploy --action push
+
+# View audit log
+og audit
+
+# View denied operations only
+og audit --denied
+
+# Manage webhooks
+og webhooks list
+og webhooks add https://ci.example.com/hook --secret my-secret
+
+# Server stats
+og stats
+```
+
 ## API
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/api/repos` | GET | List repositories |
-| `/api/repos/:name` | GET | Get repository info |
-| `/api/repos/:name/refs` | GET | List refs |
-| `/api/policy/eval` | POST | Evaluate a policy |
-| `/api/identities` | GET | List identities |
-| `/api/audit` | GET | Get audit log |
-| `/:repo/info/refs` | GET | Git Smart HTTP discovery |
-| `/:repo/git-upload-pack` | POST | Git fetch/clone |
-| `/:repo/git-receive-pack` | POST | Git push |
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/health` | GET | No | Health check |
+| `/api/repos` | GET | Yes | List repositories |
+| `/api/repos` | POST | Yes | Create repository |
+| `/api/repos/{name}` | GET | Yes | Get repository info |
+| `/api/repos/{name}` | DELETE | Yes | Delete repository (moves to trash) |
+| `/api/repos/{name}/refs` | GET | Yes | List refs |
+| `/api/repos/{name}/reflog/{ref}` | GET | Yes | Get reflog |
+| `/api/repos/{name}/size` | GET | Yes | Get repository disk size |
+| `/api/repos/bulk/create` | POST | Yes | Create multiple repositories |
+| `/api/policy/eval` | POST | Yes | Evaluate a policy |
+| `/api/policy/rules` | GET | Yes | List policy rules |
+| `/api/policy/rules` | POST | Yes | Add a policy rule |
+| `/api/identities` | GET | Yes | List identities |
+| `/api/identities` | POST | Yes | Register identity |
+| `/api/identities/{name}` | GET | Yes | Get identity info |
+| `/api/identities/{name}` | DELETE | Yes | Delete identity |
+| `/api/identities/{name}/tokens` | POST | Yes | Generate token |
+| `/api/audit` | GET | Yes | Get audit log |
+| `/api/audit/denied` | GET | Yes | Get denied operations |
+| `/api/webhooks` | GET | Yes | List webhooks |
+| `/api/webhooks` | POST | Yes | Add webhook |
+| `/api/webhooks/{idx}` | DELETE | Yes | Delete webhook |
+| `/api/stats` | GET | Yes | Server statistics |
+| `/{repo}/info/refs` | GET | Optional | Git Smart HTTP discovery |
+| `/{repo}/git-upload-pack` | POST | Optional | Git fetch/clone |
+| `/{repo}/git-receive-pack` | POST | Optional | Git push |
+
+### Authentication
+
+All `/api/*` endpoints require a Bearer token:
+```
+Authorization: Bearer og_human-admin_default_xxxxxxxx
+```
+
+Smart HTTP endpoints support optional auth via:
+- `Authorization: Bearer <token>`
+- `Authorization: Basic <base64(user:token)>`
+- Query parameter: `?token=<token>`
+
+## Webhooks
+
+Webhooks are triggered after a successful push. Each webhook can be configured with:
+
+- **URL** — Target endpoint
+- **Secret** — HMAC-SHA256 signing key (optional)
+- **Events** — `push`, `tag`, `delete-branch` (default: all)
+
+### Webhook Payload
+
+```json
+{
+  "repo": "my-project",
+  "identity": "agent-deploy",
+  "event": "push",
+  "ref_name": "refs/heads/master",
+  "old_sha": "abc123...",
+  "new_sha": "def456...",
+  "timestamp": "2026-06-11T12:00:00+00:00"
+}
+```
+
+### Verification
+
+```python
+import hmac, hashlib
+signature = "sha256=" + hmac.new(secret, payload, hashlib.sha256).hexdigest()
+# Compare with X-OpenGit-Signature header
+```
 
 ## Architecture
 
 ```
-┌──────────────┐     ┌──────────────┐
-│  Git Client   │────▶│  OpenGit     │
-│  (agent/human)│     │  Server      │
-└──────────────┘     │              │
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Git Client   │────▶│  OpenGit     │     │  og CLI      │
+│  (agent/human)│     │  Server      │◀────│  Management  │
+└──────────────┘     │              │     └──────────────┘
                      │ ┌──────────┐ │
                      │ │ Policy   │ │  ← Permission engine
                      │ │ Engine   │ │
@@ -85,8 +192,22 @@ git clone http://localhost:9418/my-repo
                      │ ┌────▼─────┐ │
                      │ │ Storage  │ │  ← Bare repos (zero migration)
                      │ └──────────┘ │
-└─────────────────────────────────────┘
+                     │              │
+                     │ ┌──────────┐ │
+                     │ │ Webhooks │ │  ← Post-receive notifications
+                     │ └──────────┘ │
+                     └──────────────┘
 ```
+
+## Project Status
+
+| Phase | Status | Features |
+|-------|--------|----------|
+| P0 | ✅ | Core: Policy Engine + Identity + Hook Pipeline + Repository |
+| P1 | ✅ | Smart HTTP + Auth Middleware + Force Push Detection + REST API |
+| P2 | ✅ | Streaming + Persistent State + Webhooks + Stats |
+| P3 | ✅ | CLI Tool + Repo Size + Bulk Operations + Precise Webhook Refs |
+| P4 | 🔄 | SSH Protocol + WASM Plugins |
 
 ## License
 

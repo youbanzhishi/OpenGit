@@ -1,7 +1,7 @@
 //! Webhook system — Post-receive notifications for CI/CD integration
 //!
-//! When a push succeeds, webhooks are triggered to notify external services.
-//! Supports configurable URLs, event filtering, and HMAC-SHA256 signatures.
+//! P3: Enhanced ref parsing — post-receive hook output is parsed to extract
+//!     exact ref names and SHAs for precise webhook payloads.
 
 use anyhow::Result;
 use opengit_core::policy::Action;
@@ -41,6 +41,23 @@ impl WebhookEvent {
             _ => None,
         }
     }
+
+    /// Classify a ref update into the matching webhook event
+    pub fn from_ref_update(ref_name: &str, old_sha: &str, new_sha: &str) -> Option<Self> {
+        let zero_sha = "0000000000000000000000000000000000000000";
+        if new_sha == zero_sha {
+            // Deletion
+            if ref_name.starts_with("refs/tags/") {
+                Some(WebhookEvent::Tag)
+            } else {
+                Some(WebhookEvent::DeleteBranch)
+            }
+        } else if ref_name.starts_with("refs/tags/") {
+            Some(WebhookEvent::Tag)
+        } else {
+            Some(WebhookEvent::Push)
+        }
+    }
 }
 
 /// Webhook delivery payload (similar to GitHub webhook format)
@@ -50,9 +67,9 @@ pub struct WebhookPayload {
     pub repo: String,
     /// Identity that triggered the event
     pub identity: String,
-    /// Event type
+    /// Event type (push, tag, delete-branch)
     pub event: String,
-    /// Ref name
+    /// Ref name (e.g., refs/heads/master)
     pub ref_name: String,
     /// Old SHA
     pub old_sha: String,
@@ -60,6 +77,37 @@ pub struct WebhookPayload {
     pub new_sha: String,
     /// Timestamp
     pub timestamp: String,
+}
+
+/// A parsed ref update from post-receive hook output
+#[derive(Debug, Clone)]
+pub struct RefUpdate {
+    pub ref_name: String,
+    pub old_sha: String,
+    pub new_sha: String,
+}
+
+impl RefUpdate {
+    /// Parse post-receive hook stdin output
+    /// Format: `<old-sha> <new-sha> <ref-name>\n`
+    pub fn parse_stdin(input: &str) -> Vec<Self> {
+        input
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .filter_map(|line| {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 3 {
+                    Some(Self {
+                        old_sha: parts[0].to_string(),
+                        new_sha: parts[1].to_string(),
+                        ref_name: parts[2].to_string(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 }
 
 impl WebhookConfig {
@@ -137,7 +185,48 @@ pub async fn deliver_webhook(config: &WebhookConfig, payload: &WebhookPayload) -
     }
 }
 
-/// Deliver all matching webhooks for an event
+/// Deliver webhooks for ref updates (P3: precise per-ref delivery)
+pub async fn deliver_for_refs(
+    webhooks: &[WebhookConfig],
+    repo: &str,
+    identity: &str,
+    ref_updates: &[RefUpdate],
+) -> u32 {
+    let mut sent = 0u32;
+    for update in ref_updates {
+        let event = match WebhookEvent::from_ref_update(&update.ref_name, &update.old_sha, &update.new_sha) {
+            Some(e) => e,
+            None => continue,
+        };
+
+        let event_name = match event {
+            WebhookEvent::Push => "push",
+            WebhookEvent::Tag => "tag",
+            WebhookEvent::DeleteBranch => "delete-branch",
+        };
+
+        let payload = WebhookPayload {
+            repo: repo.to_string(),
+            identity: identity.to_string(),
+            event: event_name.to_string(),
+            ref_name: update.ref_name.clone(),
+            old_sha: update.old_sha.clone(),
+            new_sha: update.new_sha.clone(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        };
+
+        for config in webhooks.iter().filter(|w| w.matches_event(event)) {
+            if let Err(e) = deliver_webhook(config, &payload).await {
+                error!("Webhook delivery error: {}", e);
+            } else {
+                sent += 1;
+            }
+        }
+    }
+    sent
+}
+
+/// Deliver all matching webhooks for an event (legacy — for non-ref-specific triggers)
 pub async fn deliver_all(
     webhooks: &[WebhookConfig],
     payload: &WebhookPayload,
@@ -199,5 +288,46 @@ mod tests {
             Some(WebhookEvent::DeleteBranch)
         );
         assert_eq!(WebhookEvent::from_action(Action::Admin), None);
+    }
+
+    #[test]
+    fn test_webhook_event_from_ref_update() {
+        // Normal push
+        assert_eq!(
+            WebhookEvent::from_ref_update("refs/heads/master", "abc123", "def456"),
+            Some(WebhookEvent::Push)
+        );
+        // New branch
+        assert_eq!(
+            WebhookEvent::from_ref_update(
+                "refs/heads/feature",
+                "0000000000000000000000000000000000000000",
+                "abc123"
+            ),
+            Some(WebhookEvent::Push)
+        );
+        // Delete branch
+        assert_eq!(
+            WebhookEvent::from_ref_update(
+                "refs/heads/feature",
+                "abc123",
+                "0000000000000000000000000000000000000000"
+            ),
+            Some(WebhookEvent::DeleteBranch)
+        );
+        // Tag push
+        assert_eq!(
+            WebhookEvent::from_ref_update("refs/tags/v1.0", "0000000000000000000000000000000000000000", "abc123"),
+            Some(WebhookEvent::Tag)
+        );
+    }
+
+    #[test]
+    fn test_ref_update_parse() {
+        let input = "abc123def456789012345678901234567890abcd def456789012345678901234567890abcdef1234 refs/heads/master\n0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 refs/heads/feature\n";
+        let updates = RefUpdate::parse_stdin(input);
+        assert_eq!(updates.len(), 2);
+        assert_eq!(updates[0].ref_name, "refs/heads/master");
+        assert_eq!(updates[1].ref_name, "refs/heads/feature");
     }
 }

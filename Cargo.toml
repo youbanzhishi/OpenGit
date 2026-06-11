@@ -4,11 +4,12 @@ members = [
     "crates/opengit-server",
     "crates/opengit-hooks",
     "crates/opengit-storage",
+    "crates/opengit-cli",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/youbanzhishi/OpenGit"
@@ -34,3 +35,4 @@ hex = "0.4"
 tokio-util = { version = "0.7", features = ["io"] }
 base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+clap = { version = "4", features = ["derive"] }

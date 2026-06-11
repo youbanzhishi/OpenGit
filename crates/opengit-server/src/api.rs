@@ -1,7 +1,6 @@
 //! REST API — Repository management, policy, identity, webhook, and stats endpoints
 //!
-//! P2: RwLock-based mutable state, persistence, auth-protected API,
-//!     working identity/policy mutations, webhook management, stats.
+//! P3: Added repo size endpoint, bulk repo operations, ref-specific webhooks.
 
 use axum::{
     extract::{Extension, Path, State},
@@ -99,6 +98,8 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         .route("/repos/{name}", get(get_repo).delete(delete_repo))
         .route("/repos/{name}/refs", get(get_repo_refs))
         .route("/repos/{name}/reflog/{ref_name}", get(get_repo_reflog))
+        .route("/repos/{name}/size", get(get_repo_size))
+        .route("/repos/bulk/create", post(bulk_create_repos))
         .route("/policy/eval", post(eval_policy))
         .route(
             "/policy/rules",
@@ -249,17 +250,14 @@ async fn delete_repo(
         action: "DeleteRepo".into(),
         ref_name: None,
         allowed: true,
-        reason: Some(format!("Moved to trash: {}", trash_path.display())),
+        reason: Some("Moved to trash".into()),
     });
 
-    tracing::info!(
-        "Moved repo {} to trash: {} by {}",
-        name,
-        trash_path.display(),
-        identity.0
-    );
+    tracing::info!("Deleted repo: {} by {} (moved to trash)", name, identity.0);
     Ok(StatusCode::NO_CONTENT)
 }
+
+// ─── Repo refs and size ────────────────────────────────────────────
 
 async fn get_repo_refs(
     Path(name): Path<String>,
@@ -274,7 +272,7 @@ async fn get_repo_refs(
         .map(|r| RefInfo {
             name: r.name.clone(),
             sha: r.sha.clone(),
-            kind: format!("{:?}", r.kind).to_lowercase(),
+            kind: format!("{:?}", r.kind).to_kebab_case(),
         })
         .collect();
 
@@ -288,10 +286,8 @@ async fn get_repo_reflog(
     let repo_path = state.config.repos_dir.join(format!("{}.git", name));
     let repo = Repository::open(&repo_path).map_err(|_| StatusCode::NOT_FOUND)?;
 
-    let entries = repo
-        .reflog(&ref_name)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let infos: Vec<ReflogEntryInfo> = entries
+    let reflog = repo.reflog(&ref_name).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let infos: Vec<ReflogEntryInfo> = reflog
         .iter()
         .map(|e| ReflogEntryInfo {
             old_sha: e.old_sha.clone(),
@@ -303,44 +299,80 @@ async fn get_repo_reflog(
     Ok(Json(infos))
 }
 
-/// Install OpenGit hooks into a bare repo
-fn install_hooks(repo_path: &std::path::Path) -> Result<(), anyhow::Error> {
-    let hooks_dir = repo_path.join("hooks");
-    std::fs::create_dir_all(&hooks_dir)?;
-
-    // Pre-receive hook — calls opengit-pre-receive binary if available,
-    // falls back to shell script that blocks branch deletion for agents
-    let pre_receive = r#"#!/bin/sh
-# OpenGit pre-receive hook
-# Reads OPENGIT_IDENTITY from environment (set by Smart HTTP server)
-# and evaluates policy for each ref update
-
-IDENTITY="${OPENGIT_IDENTITY:-anonymous}"
-REPO="${OPENGIT_REPO:-unknown}"
-
-# Try opengit-pre-receive binary first
-if command -v opengit-pre-receive >/dev/null 2>&1; then
-    exec opengit-pre-receive
-fi
-
-# Fallback: block branch deletion for agents
-while read old_sha new_sha ref_name; do
-    if [ "$new_sha" = "0000000000000000000000000000000000000000" ]; then
-        echo "DRAGON_FIREWALL: DENIED - Deleting $ref_name is not allowed for $IDENTITY" >&2
-        exit 1
-    fi
-done
-"#;
-    std::fs::write(hooks_dir.join("pre-receive"), pre_receive)?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(0o755);
-        std::fs::set_permissions(hooks_dir.join("pre-receive"), perms)?;
+/// GET /api/repos/{name}/size — Get repository disk size
+async fn get_repo_size(
+    Path(name): Path<String>,
+    State(state): State<SharedState>,
+) -> Result<Json<RepoSizeInfo>, StatusCode> {
+    let repo_path = state.config.repos_dir.join(format!("{}.git", name));
+    if !repo_path.exists() {
+        return Err(StatusCode::NOT_FOUND);
     }
 
-    Ok(())
+    let repo = Repository::open(&repo_path).map_err(|_| StatusCode::NOT_FOUND)?;
+    let size_bytes = repo.size_bytes().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(RepoSizeInfo {
+        name,
+        size_bytes,
+        size_human: humanize_bytes(size_bytes),
+    }))
+}
+
+/// POST /api/repos/bulk/create — Create multiple repositories at once
+async fn bulk_create_repos(
+    State(state): State<SharedState>,
+    Extension(identity): Extension<IdentityName>,
+    Json(req): Json<BulkCreateReposRequest>,
+) -> Result<Json<BulkCreateReposResponse>, StatusCode> {
+    // Check Admin permission
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &identity.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    let mut created = Vec::new();
+    let mut failed = Vec::new();
+
+    for name in &req.names {
+        match Repository::create(&state.config.repos_dir, name) {
+            Ok(repo) => {
+                if let Err(e) = install_hooks(&repo.path) {
+                    tracing::warn!("Failed to install hooks for {}: {}", name, e);
+                }
+                created.push(name.clone());
+
+                state.audit_log.log(opengit_core::audit::AuditEntry {
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    repo: name.clone(),
+                    identity: identity.0.clone(),
+                    action: "CreateRepo".into(),
+                    ref_name: None,
+                    allowed: true,
+                    reason: None,
+                });
+            }
+            Err(e) => {
+                tracing::warn!("Failed to create repo {}: {}", name, e);
+                failed.push(BulkCreateFailure {
+                    name: name.clone(),
+                    reason: e.to_string(),
+                });
+            }
+        }
+    }
+
+    tracing::info!(
+        "Bulk create: {} created, {} failed by {}",
+        created.len(),
+        failed.len(),
+        identity.0
+    );
+
+    Ok(Json(BulkCreateReposResponse { created, failed }))
 }
 
 // ─── Policy endpoints ───────────────────────────────────────────────
@@ -348,19 +380,23 @@ done
 async fn eval_policy(
     State(state): State<SharedState>,
     Json(req): Json<EvalRequest>,
-) -> Json<EvalResult> {
+) -> Result<Json<EvalResult>, StatusCode> {
     let engine = state.policy_engine.read().await;
     let result = engine.evaluate(&req.repo, &req.identity, req.action);
-    Json(result)
+    Ok(Json(result))
 }
 
-async fn list_policy_rules(State(state): State<SharedState>) -> Json<Value> {
+async fn list_policy_rules(
+    State(state): State<SharedState>,
+) -> Result<Json<Vec<PolicyRuleInfo>>, StatusCode> {
     let engine = state.policy_engine.read().await;
 
-    let mut custom: Vec<PolicyRuleInfo> = Vec::new();
+    let mut rules = Vec::new();
+
+    // Custom policies
     for policy in engine.custom_policies() {
         for rule in &policy.rules {
-            custom.push(PolicyRuleInfo {
+            rules.push(PolicyRuleInfo {
                 repo: policy.repo.clone(),
                 identity: rule.identity.clone(),
                 action: format!("{:?}", rule.action).to_kebab_case(),
@@ -370,9 +406,9 @@ async fn list_policy_rules(State(state): State<SharedState>) -> Json<Value> {
         }
     }
 
-    let mut default: Vec<PolicyRuleInfo> = Vec::new();
+    // Default policy
     for rule in &engine.default_policy().rules {
-        default.push(PolicyRuleInfo {
+        rules.push(PolicyRuleInfo {
             repo: "*".into(),
             identity: rule.identity.clone(),
             action: format!("{:?}", rule.action).to_kebab_case(),
@@ -381,29 +417,25 @@ async fn list_policy_rules(State(state): State<SharedState>) -> Json<Value> {
         });
     }
 
-    Json(serde_json::json!({
-        "custom_policies": custom,
-        "default_policy": default,
-    }))
+    Ok(Json(rules))
 }
 
 async fn add_policy_rule(
     State(state): State<SharedState>,
-    Extension(identity): Extension<IdentityName>,
+    Extension(caller): Extension<IdentityName>,
     Json(req): Json<AddPolicyRuleRequest>,
 ) -> Result<StatusCode, StatusCode> {
     // Only admins can add policy rules
     {
         let engine = state.policy_engine.read().await;
-        let result = engine.evaluate("*", &identity.0, Action::Admin);
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
         if !result.is_allowed() {
             return Err(StatusCode::FORBIDDEN);
         }
     }
 
-    let action: Action = parse_action(&req.action).ok_or(StatusCode::BAD_REQUEST)?;
-    let permission: opengit_core::policy::Permission =
-        parse_permission(&req.permission).ok_or(StatusCode::BAD_REQUEST)?;
+    let action = parse_action(&req.action).ok_or(StatusCode::BAD_REQUEST)?;
+    let permission = parse_permission(&req.permission).ok_or(StatusCode::BAD_REQUEST)?;
 
     let rule = PolicyRule {
         identity: req.identity.clone(),
@@ -414,23 +446,14 @@ async fn add_policy_rule(
 
     {
         let mut engine = state.policy_engine.write().await;
-        // Find matching policy or create a new one
-        let repo_pattern = req.repo.as_deref().unwrap_or("*");
-        let found = engine
-            .custom_policies()
-            .iter()
-            .any(|p| p.repo == repo_pattern);
-        if found {
-            // Add rule to existing policy
-            // We need to do this through the engine directly
-            for policy in engine.custom_policies_mut() {
-                if policy.repo == repo_pattern {
-                    policy.add_rule(rule);
-                    break;
-                }
-            }
+        let repo = req.repo.as_deref().unwrap_or("*");
+
+        // Find or create policy for this repo
+        let found = engine.custom_policies_mut().iter_mut().find(|p| p.repo == repo);
+        if let Some(policy) = found {
+            policy.add_rule(rule);
         } else {
-            let mut policy = Policy::new(repo_pattern);
+            let mut policy = Policy::new(repo);
             policy.add_rule(rule);
             engine.add_policy(policy);
         }
@@ -441,12 +464,20 @@ async fn add_policy_rule(
         }
     }
 
-    tracing::info!(
-        "Policy rule added by {}: {} -> {}",
-        identity.0,
-        req.identity,
-        req.action
-    );
+    state.audit_log.log(opengit_core::audit::AuditEntry {
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        repo: req.repo.clone().unwrap_or_else(|| "*".into()),
+        identity: caller.0.clone(),
+        action: "AddPolicyRule".into(),
+        ref_name: None,
+        allowed: true,
+        reason: Some(format!(
+            "Added rule: {} → {:?} → {:?}",
+            req.identity, action, permission
+        )),
+    });
+
+    tracing::info!("Policy rule added by {}", caller.0);
     Ok(StatusCode::CREATED)
 }
 
@@ -454,12 +485,16 @@ async fn add_policy_rule(
 
 async fn list_identities(State(state): State<SharedState>) -> Json<Vec<IdentityInfo>> {
     let store = state.identity_store.read().await;
-    let identities = store.list();
-    let infos: Vec<IdentityInfo> = identities
+    let infos: Vec<IdentityInfo> = store
+        .list()
         .iter()
         .map(|i| IdentityInfo {
             name: i.name.clone(),
-            kind: if i.is_agent() { "agent" } else { "human" }.into(),
+            kind: if i.is_agent() {
+                "agent".into()
+            } else {
+                "human".into()
+            },
             display_name: i.display_name.clone(),
             token_count: i.tokens.len(),
         })
@@ -476,11 +511,10 @@ async fn get_identity(
     Ok(Json(IdentityInfo {
         name: identity.name.clone(),
         kind: if identity.is_agent() {
-            "agent"
+            "agent".into()
         } else {
-            "human"
-        }
-        .into(),
+            "human".into()
+        },
         display_name: identity.display_name.clone(),
         token_count: identity.tokens.len(),
     }))
@@ -520,7 +554,6 @@ async fn register_identity(
     {
         let mut store = state.identity_store.write().await;
         store.register(identity);
-        // Persist
         if let Err(e) = store.save_to_file(&state.config.identity_file) {
             tracing::error!("Failed to save identity file: {}", e);
         }
@@ -551,7 +584,6 @@ async fn generate_token(
     Extension(caller): Extension<IdentityName>,
     Json(req): Json<GenerateTokenRequest>,
 ) -> Result<Json<GenerateTokenResponse>, StatusCode> {
-    // Only admins can generate tokens for others, or self-service
     let is_self = caller.0 == name;
     if !is_self {
         let engine = state.policy_engine.read().await;
@@ -565,7 +597,6 @@ async fn generate_token(
         let mut store = state.identity_store.write().await;
         let identity = store.find_mut(&name).ok_or(StatusCode::NOT_FOUND)?;
         let secret = identity.generate_token(&req.label);
-        // Persist
         if let Err(e) = store.save_to_file(&state.config.identity_file) {
             tracing::error!("Failed to save identity file: {}", e);
         }
@@ -665,7 +696,6 @@ async fn add_webhook(
     {
         let mut webhooks = state.webhooks.write().await;
         webhooks.push(req.into_config());
-        // Persist
         if let Ok(content) = serde_yaml::to_string(&*webhooks) {
             if let Some(parent) = state.config.webhook_file.parent() {
                 let _ = std::fs::create_dir_all(parent);
@@ -698,7 +728,6 @@ async fn delete_webhook(
             return Err(StatusCode::NOT_FOUND);
         }
         webhooks.remove(idx);
-        // Persist
         if let Ok(content) = serde_yaml::to_string(&*webhooks) {
             let _ = std::fs::write(&state.config.webhook_file, content);
         }
@@ -723,6 +752,27 @@ async fn get_stats(State(state): State<SharedState>) -> Json<serde_json::Value> 
         "total_webhooks_sent": snapshot.total_webhooks_sent,
         "uptime_seconds": snapshot.uptime_seconds,
     }))
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────
+
+fn install_hooks(repo_path: &std::path::Path) -> anyhow::Result<()> {
+    opengit_storage::HookInstaller::install(repo_path)
+}
+
+fn humanize_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = 1024 * KB;
+    const GB: u64 = 1024 * MB;
+    if bytes >= GB {
+        format!("{:.2} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.2} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.2} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} B", bytes)
+    }
 }
 
 // ─── Data types ─────────────────────────────────────────────────────
@@ -783,8 +833,32 @@ pub struct RepoInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct RepoSizeInfo {
+    pub name: String,
+    pub size_bytes: u64,
+    pub size_human: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CreateRepoRequest {
     pub name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BulkCreateReposRequest {
+    pub names: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BulkCreateReposResponse {
+    pub created: Vec<String>,
+    pub failed: Vec<BulkCreateFailure>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BulkCreateFailure {
+    pub name: String,
+    pub reason: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

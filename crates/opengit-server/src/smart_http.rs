@@ -3,8 +3,7 @@
 //! Implements the Git Smart HTTP protocol by spawning
 //! git-upload-pack / git-receive-pack processes.
 //!
-//! P2: Streaming for upload_pack (prevents OOM on large repos),
-//!     webhook triggers on receive_pack success.
+//! P3: Precise webhook delivery with ref parsing from receive-pack output.
 
 use axum::{
     extract::{Extension, Path, Query, State},
@@ -17,7 +16,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::api::SharedState;
 use crate::middleware::IdentityName;
-use crate::webhook::{WebhookEvent, WebhookPayload};
+use crate::webhook::{WebhookEvent, WebhookPayload, RefUpdate};
 
 /// Query parameters for info/refs endpoint
 #[derive(Debug, Deserialize)]
@@ -26,9 +25,6 @@ pub struct InfoRefsQuery {
 }
 
 /// GET /{repo}/info/refs — Git discovery endpoint
-///
-/// This is the first request a git client makes. It advertises
-/// the refs available in the repository.
 pub async fn info_refs(
     Path(repo_name): Path<String>,
     State(state): State<SharedState>,
@@ -40,18 +36,16 @@ pub async fn info_refs(
         return (StatusCode::NOT_FOUND, "Repository not found").into_response();
     }
 
-    // Determine service from query parameter
     let service = match query.service.as_deref() {
         Some("git-upload-pack") => "git-upload-pack",
         Some("git-receive-pack") => "git-receive-pack",
         _ => "git-upload-pack",
     };
 
-    // For receive-pack, require push permission
     if service == "git-receive-pack" {
         let engine = state.policy_engine.read().await;
         let result = engine.evaluate(&repo_name, &identity.0, opengit_core::policy::Action::Push);
-        drop(engine); // Release lock before git operation
+        drop(engine);
         if !result.is_allowed() {
             return (
                 StatusCode::FORBIDDEN,
@@ -65,7 +59,6 @@ pub async fn info_refs(
         }
     }
 
-    // Spawn the git process for ref advertisement
     let output = Command::new(service)
         .arg("--stateless-rpc")
         .arg("--advertise-refs")
@@ -76,7 +69,6 @@ pub async fn info_refs(
     match output {
         Ok(output) if output.status.success() => {
             let content_type = format!("application/x-{}-advertisement", service);
-            // Smart HTTP response: pkt-line header + flush + ref advertisement
             let pkt_header = format!("# service={}\n", service);
             let pkt_len = pkt_header.len() + 4;
             let header_line = format!("{:04x}{}", pkt_len, pkt_header);
@@ -121,9 +113,6 @@ pub async fn info_refs(
 }
 
 /// POST /{repo}/git-upload-pack — Clone/fetch/pull (STREAMING)
-///
-/// Handles the pack negotiation for read operations.
-/// Streams stdout directly to the client to avoid OOM on large repos.
 pub async fn upload_pack(
     Path(repo_name): Path<String>,
     State(state): State<SharedState>,
@@ -135,7 +124,6 @@ pub async fn upload_pack(
         return (StatusCode::NOT_FOUND, "Repository not found").into_response();
     }
 
-    // Check read permission
     {
         let engine = state.policy_engine.read().await;
         let result = engine.evaluate(&repo_name, &identity.0, opengit_core::policy::Action::Read);
@@ -157,7 +145,6 @@ pub async fn upload_pack(
     debug!("upload_pack: repo={} identity={}", repo_name, identity.0);
     state.stats.record_clone();
 
-    // Spawn git-upload-pack --stateless-rpc
     let mut child = match Command::new("git-upload-pack")
         .arg("--stateless-rpc")
         .arg(&repo_path)
@@ -177,7 +164,6 @@ pub async fn upload_pack(
         }
     };
 
-    // Write request body to stdin in a background task
     if let Some(stdin) = child.stdin.take() {
         tokio::spawn(async move {
             use tokio::io::AsyncWriteExt;
@@ -188,7 +174,6 @@ pub async fn upload_pack(
         });
     }
 
-    // Stream stdout directly to response
     let stdout = child.stdout.take().unwrap();
     let reader = tokio::io::BufReader::new(stdout);
     let stream = tokio_util::io::ReaderStream::new(reader);
@@ -203,9 +188,6 @@ pub async fn upload_pack(
 }
 
 /// POST /{repo}/git-receive-pack — Push (STREAMING + WEBHOOKS)
-///
-/// Handles the pack negotiation for write operations.
-/// Streams stdout to the client, triggers webhooks on success.
 pub async fn receive_pack(
     Path(repo_name): Path<String>,
     State(state): State<SharedState>,
@@ -253,7 +235,10 @@ pub async fn receive_pack(
 
     info!("receive_pack: repo={} identity={}", repo_name, identity.0);
 
-    // Spawn git-receive-pack --stateless-rpc
+    // Parse ref updates from the request body for precise webhook delivery
+    // The pack data starts after the ref update lines (terminated by a flush packet "0000")
+    let ref_updates = parse_ref_updates_from_pack(&body);
+
     let mut child = match Command::new("git-receive-pack")
         .arg("--stateless-rpc")
         .arg(&repo_path)
@@ -276,7 +261,6 @@ pub async fn receive_pack(
         }
     };
 
-    // Write request body to stdin in a background task
     if let Some(stdin) = child.stdin.take() {
         tokio::spawn(async move {
             use tokio::io::AsyncWriteExt;
@@ -287,10 +271,9 @@ pub async fn receive_pack(
         });
     }
 
-    // Take stdout for streaming
     let stdout = child.stdout.take().unwrap();
 
-    // Background task: wait for child exit → audit + webhook
+    // Background task: wait for child exit → audit + webhook with precise ref info
     let webhook_state = state.clone();
     let webhook_identity = identity.0.clone();
     let webhook_repo = repo_name.clone();
@@ -315,19 +298,33 @@ pub async fn receive_pack(
                         reason: None,
                     });
 
-                // Trigger webhooks
+                // Deliver webhooks with precise ref info
                 let webhooks = webhook_state.webhooks.read().await;
-                let payload = WebhookPayload {
-                    repo: webhook_repo.clone(),
-                    identity: webhook_identity.clone(),
-                    event: "push".into(),
-                    ref_name: "refs/heads/master".into(), // Best-effort — actual ref parsed by hooks
-                    old_sha: String::new(),
-                    new_sha: String::new(),
-                    timestamp: chrono::Utc::now().to_rfc3339(),
-                };
-                crate::webhook::deliver_all(&webhooks, &payload, WebhookEvent::Push).await;
-                webhook_state.stats.record_webhook();
+                if !ref_updates.is_empty() {
+                    let sent = crate::webhook::deliver_for_refs(
+                        &webhooks,
+                        &webhook_repo,
+                        &webhook_identity,
+                        &ref_updates,
+                    )
+                    .await;
+                    for _ in 0..sent {
+                        webhook_state.stats.record_webhook();
+                    }
+                } else {
+                    // Fallback: generic push event
+                    let payload = WebhookPayload {
+                        repo: webhook_repo.clone(),
+                        identity: webhook_identity.clone(),
+                        event: "push".into(),
+                        ref_name: "refs/heads/master".into(),
+                        old_sha: String::new(),
+                        new_sha: String::new(),
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                    };
+                    crate::webhook::deliver_all(&webhooks, &payload, WebhookEvent::Push).await;
+                    webhook_state.stats.record_webhook();
+                }
             }
             Ok(status) => {
                 warn!(
@@ -369,4 +366,93 @@ pub async fn receive_pack(
         )
         .body(response_body)
         .unwrap()
+}
+
+/// Parse ref updates from a git-receive-pack request body.
+///
+/// The first part of the body contains "want" and "have" lines,
+/// but for receive-pack, the client sends ref update commands
+/// in pkt-line format. We try to extract ref updates from the
+/// command section of the request.
+fn parse_ref_updates_from_pack(body: &[u8]) -> Vec<RefUpdate> {
+    // Git receive-pack request format:
+    //   First line: <old-sha> <new-sha> <ref-name>\0<capabilities>
+    //   Additional lines: <old-sha> <new-sha> <ref-name>
+    //   Flush: 0000
+    //   Then pack data
+    let mut updates = Vec::new();
+    let mut pos = 0;
+
+    while pos + 4 <= body.len() {
+        // Read pkt-line length
+        let len_str = match std::str::from_utf8(&body[pos..pos + 4]) {
+            Ok(s) => s,
+            Err(_) => break,
+        };
+        let len = match u16::from_str_radix(len_str, 16) {
+            Ok(l) => l as usize,
+            Err(_) => break,
+        };
+
+        if len == 0 {
+            // Flush packet — end of commands
+            pos += 4;
+            break;
+        }
+
+        if len < 4 || pos + len > body.len() {
+            break;
+        }
+
+        let line = match std::str::from_utf8(&body[pos + 4..pos + len]) {
+            Ok(s) => s.trim_end(),
+            Err(_) => {
+                pos += len;
+                continue;
+            }
+        };
+
+        // Parse: <old-sha> <new-sha> <ref-name>\0<capabilities>
+        let line_no_caps = line.split('\0').next().unwrap_or(line);
+        let parts: Vec<&str> = line_no_caps.split_whitespace().collect();
+        if parts.len() >= 3 && parts[0].len() == 40 && parts[1].len() == 40 {
+            updates.push(RefUpdate {
+                old_sha: parts[0].to_string(),
+                new_sha: parts[1].to_string(),
+                ref_name: parts[2].to_string(),
+            });
+        }
+
+        pos += len;
+    }
+
+    if !updates.is_empty() {
+        debug!("Parsed {} ref updates from receive-pack request", updates.len());
+    }
+
+    updates
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_ref_updates_from_pack() {
+        // Simulate a git-receive-pack request with one ref update
+        // Format: pkt-line with "old_sha new_sha refs/heads/master\0capabilities"
+        let old_sha = "abc1230000000000000000000000000000000000";
+        let new_sha = "def4560000000000000000000000000000000000";
+        let cmd = format!("{} {} refs/heads/master\0report-status side-band-6k", old_sha, new_sha);
+        let len = cmd.len() + 4;
+        let pkt_line = format!("{:04x}{}", len, cmd);
+        let flush = "0000";
+        let body = format!("{}{}some-pack-data", pkt_line, flush);
+
+        let updates = parse_ref_updates_from_pack(body.as_bytes());
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0].ref_name, "refs/heads/master");
+        assert_eq!(updates[0].old_sha, old_sha);
+        assert_eq!(updates[0].new_sha, new_sha);
+    }
 }
