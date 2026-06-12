@@ -1,6 +1,6 @@
 //! Server configuration
 //!
-//! P2: Added webhook file path configuration.
+//! P4: Added SSH and plugin configuration.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -10,8 +10,14 @@ use std::path::PathBuf;
 pub struct ServerConfig {
     /// Directory containing bare repositories
     pub repos_dir: PathBuf,
-    /// Bind address (e.g., "0.0.0.0:9418")
+    /// HTTP bind address (e.g., "0.0.0.0:9418")
     pub bind: String,
+    /// SSH bind address (empty = SSH disabled)
+    #[serde(default)]
+    pub ssh_bind: String,
+    /// Host key for SSH
+    #[serde(default = "default_ssh_host_key")]
+    pub ssh_host_key: PathBuf,
     /// Policy file path
     pub policy_file: PathBuf,
     /// Identity file path
@@ -19,7 +25,23 @@ pub struct ServerConfig {
     /// Audit log file path
     pub audit_file: PathBuf,
     /// Webhook config file path
+    #[serde(default = "default_webhook_file")]
     pub webhook_file: PathBuf,
+    /// Plugin config file path
+    #[serde(default = "default_plugin_file")]
+    pub plugin_file: PathBuf,
+}
+
+fn default_ssh_host_key() -> PathBuf {
+    PathBuf::from("config/ssh_host_key")
+}
+
+fn default_webhook_file() -> PathBuf {
+    PathBuf::from("config/webhooks.yaml")
+}
+
+fn default_plugin_file() -> PathBuf {
+    PathBuf::from("config/plugins.toml")
 }
 
 impl ServerConfig {
@@ -53,10 +75,13 @@ impl ServerConfig {
         Self {
             repos_dir: PathBuf::from("./repos"),
             bind: "0.0.0.0:9418".into(),
+            ssh_bind: String::new(),
+            ssh_host_key: PathBuf::from("config/ssh_host_key"),
             policy_file: PathBuf::from("config/policies.yaml"),
             identity_file: PathBuf::from("config/identities.yaml"),
             audit_file: PathBuf::from("data/audit.json"),
             webhook_file: PathBuf::from("config/webhooks.yaml"),
+            plugin_file: PathBuf::from("config/plugins.toml"),
         }
     }
 }

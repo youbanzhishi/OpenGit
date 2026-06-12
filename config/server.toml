@@ -3,8 +3,14 @@
 # Directory containing bare repositories
 repos_dir = "./repos"
 
-# Bind address
+# HTTP bind address
 bind = "0.0.0.0:9418"
+
+# SSH bind address (empty = SSH disabled)
+ssh_bind = "0.0.0.0:2222"
+
+# Host key for SSH (ED25519)
+ssh_host_key = "config/ssh_host_key"
 
 # Policy file
 policy_file = "config/policies.yaml"
@@ -14,3 +20,6 @@ identity_file = "config/identities.yaml"
 
 # Audit log
 audit_file = "data/audit.json"
+
+# Plugin configuration
+plugin_file = "config/plugins.toml"

@@ -1,0 +1,21 @@
+# OpenGit Plugin Configuration
+#
+# Each plugin can be enabled/disabled and configured independently.
+# Plugins run AFTER the policy engine evaluation.
+
+[[plugins]]
+name = "branch-protection"
+enabled = true
+
+[plugins.settings]
+protected_branches = ["master", "main", "release/*"]
+allow_force_push = false
+allow_delete = false
+
+[[plugins]]
+name = "push-limit"
+enabled = true
+
+[plugins.settings]
+max_file_size_mb = 100
+max_total_size_mb = 500
