@@ -66,6 +66,57 @@ enum Commands {
     },
     /// View server stats
     Stats,
+    /// Import a repository from external Git URL
+    Import {
+        /// Remote Git URL to import (e.g., https://github.com/user/repo.git)
+        url: String,
+        /// Local repository name (derived from URL if not specified)
+        #[arg(short, long)]
+        name: Option<String>,
+        /// Username for HTTPS authentication
+        #[arg(short, long)]
+        username: Option<String>,
+        /// Password/token for HTTPS authentication
+        #[arg(short, long)]
+        password: Option<String>,
+        /// Repository description
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+    /// Migrate repositories from Gitea
+    MigrateGitea {
+        /// Gitea server URL (e.g., https://gitea.example.com)
+        server_url: String,
+        /// Gitea API token
+        #[arg(long, env = "GITEA_TOKEN")]
+        token: String,
+        /// Owner/organization to migrate
+        #[arg(short, long)]
+        owner: Option<String>,
+        /// Specific repos to migrate (comma-separated)
+        #[arg(short, long)]
+        repos: Option<String>,
+        /// Include labels
+        #[arg(long, default_value = "true")]
+        include_labels: bool,
+        /// Include milestones
+        #[arg(long, default_value = "true")]
+        include_milestones: bool,
+        /// Include releases
+        #[arg(long)]
+        include_releases: bool,
+        /// Name prefix for imported repos
+        #[arg(long, default_value = "")]
+        name_prefix: String,
+        /// Clone username (if different from API token)
+        #[arg(long)]
+        clone_username: Option<String>,
+        /// Clone password
+        #[arg(long)]
+        clone_password: Option<String>,
+    },
+    /// View import status
+    ImportStatus,
     /// Health check
     Health,
 }
@@ -381,6 +432,93 @@ async fn main() -> Result<()> {
             println!("   Webhooks sent:  {}", stats.total_webhooks_sent);
             println!("   Uptime:         {}s", stats.uptime_seconds);
         }
+        Commands::Import {
+            url,
+            name,
+            username,
+            password,
+            description,
+        } => {
+            let result = client
+                .import_repo(&url, name.as_deref(), username.as_deref(), password.as_deref(), description.as_deref())
+                .await?;
+            if result.success {
+                println!("✅ Imported: {} ({} branches, {} tags)", result.name, result.branches, result.tags);
+                println!("   Source: {}", result.source_url);
+                println!("   Time: {:.1}s", result.elapsed_secs);
+            } else {
+                println!(
+                    "❌ Import failed: {}",
+                    result.error.as_deref().unwrap_or("unknown error")
+                );
+            }
+        }
+        Commands::MigrateGitea {
+            server_url,
+            token,
+            owner,
+            repos,
+            include_labels,
+            include_milestones,
+            include_releases,
+            name_prefix,
+            clone_username,
+            clone_password,
+        } => {
+            let repo_list: Vec<String> = repos
+                .as_deref()
+                .map(|s| s.split(',').map(|r| r.trim().to_string()).collect())
+                .unwrap_or_default();
+
+            println!("🔄 Starting Gitea migration from {}...", server_url);
+            let result = client
+                .migrate_gitea(
+                    &server_url,
+                    &token,
+                    owner.as_deref(),
+                    &repo_list,
+                    include_labels,
+                    include_milestones,
+                    include_releases,
+                    &name_prefix,
+                    clone_username.as_deref(),
+                    clone_password.as_deref(),
+                )
+                .await?;
+
+            println!("\n🐉 Migration complete!");
+            println!("   Total discovered: {}", result.total);
+            println!("   Successfully imported: {}", result.imported);
+            println!("   Failed: {}", result.failed);
+            println!("   Time: {:.1}s", result.elapsed_secs);
+
+            if result.failed > 0 {
+                println!("\n❌ Failed imports:");
+                for r in &result.results {
+                    if !r.success {
+                        println!("   {} — {}", r.name, r.error.as_deref().unwrap_or("unknown"));
+                    }
+                }
+            }
+        }
+        Commands::ImportStatus => {
+            let status = client.import_status().await?;
+            if status.is_empty() {
+                println!("No imports recorded.");
+            } else {
+                println!("{:<25} {:<8} {:<8} {:<8} RESULT", "NAME", "BRANCHES", "TAGS", "TIME");
+                for r in &status {
+                    println!(
+                        "{:<25} {:<8} {:<8} {:<8.1} {}",
+                        r.name,
+                        r.branches,
+                        r.tags,
+                        r.elapsed_secs,
+                        if r.success { "✅" } else { "❌" }
+                    );
+                }
+            }
+        }
         Commands::Health => match client.health().await {
             Ok(msg) => println!("✅ {}", msg),
             Err(e) => println!("❌ Server unreachable: {}", e),
@@ -468,6 +606,26 @@ struct StatsInfo {
     total_denials: u64,
     total_webhooks_sent: u64,
     uptime_seconds: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ImportResultInfo {
+    name: String,
+    source_url: String,
+    branches: usize,
+    tags: usize,
+    elapsed_secs: f64,
+    success: bool,
+    error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MigrationResultInfo {
+    total: usize,
+    imported: usize,
+    failed: usize,
+    results: Vec<ImportResultInfo>,
+    elapsed_secs: f64,
 }
 
 struct ApiClient {
@@ -694,5 +852,64 @@ impl ApiClient {
 
     async fn stats(&self) -> Result<StatsInfo> {
         self.get("/api/stats").await
+    }
+
+    // ─── Import & Migration API Methods ──────────────────────────
+
+    async fn import_repo(
+        &self,
+        url: &str,
+        name: Option<&str>,
+        username: Option<&str>,
+        password: Option<&str>,
+        description: Option<&str>,
+    ) -> Result<ImportResultInfo> {
+        self.post_json(
+            "/api/import",
+            &serde_json::json!({
+                "url": url,
+                "name": name,
+                "mirror": true,
+                "username": username,
+                "password": password,
+                "description": description,
+            }),
+        )
+        .await
+    }
+
+    async fn migrate_gitea(
+        &self,
+        server_url: &str,
+        token: &str,
+        owner: Option<&str>,
+        repos: &[String],
+        include_labels: bool,
+        include_milestones: bool,
+        include_releases: bool,
+        name_prefix: &str,
+        clone_username: Option<&str>,
+        clone_password: Option<&str>,
+    ) -> Result<MigrationResultInfo> {
+        self.post_json(
+            "/api/import/gitea",
+            &serde_json::json!({
+                "server_url": server_url,
+                "token": token,
+                "owner": owner,
+                "repos": repos,
+                "include_labels": include_labels,
+                "include_milestones": include_milestones,
+                "include_releases": include_releases,
+                "name_prefix": name_prefix,
+                "clone_username": clone_username,
+                "clone_password": clone_password,
+            }),
+        )
+        .await
+    }
+
+    async fn import_status(&self) -> Result<Vec<ImportResultInfo>> {
+        self.get("/api/import/status").await
     }
 }

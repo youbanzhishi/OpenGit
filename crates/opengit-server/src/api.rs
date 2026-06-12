@@ -25,6 +25,7 @@ use crate::middleware::{require_auth, smart_http_auth, IdentityName};
 use crate::stats::ServerStats;
 use crate::webhook::WebhookConfig;
 use opengit_core::mirror::{MirrorTarget, MirrorsFile};
+use opengit_core::import::{ImportRequest, ImportSource, GiteaMigrateConfig, ImportEngine};
 
 pub struct AppState {
     pub config: ServerConfig,
@@ -34,6 +35,7 @@ pub struct AppState {
     pub webhooks: RwLock<Vec<WebhookConfig>>,
     pub stats: ServerStats,
     pub mirrors: RwLock<MirrorsFile>,
+    pub import_status: RwLock<Vec<ImportResultInfo>>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -127,6 +129,9 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         .route("/stats", get(get_stats))
         .route("/mirrors", get(list_mirrors).post(add_mirror))
         .route("/mirrors/{idx}", delete(delete_mirror))
+        .route("/import", post(import_repo))
+        .route("/import/gitea", post(migrate_gitea))
+        .route("/import/status", get(import_status))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     let app = Router::new()
@@ -1078,4 +1083,195 @@ pub struct AddMirrorRequest {
     pub url: String,
     pub repos: Option<Vec<String>>,
     pub refs: Option<Vec<String>>,
+}
+
+
+// ─── Import & Migration endpoints (P6/P7) ───────────────────────────
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImportRequestBody {
+    /// Remote URL to clone from
+    pub url: String,
+    /// Local repository name (optional, derived from URL if not provided)
+    pub name: Option<String>,
+    /// Whether to mirror all refs (default: true)
+    #[serde(default = "default_true")]
+    pub mirror: bool,
+    /// Username for HTTPS authentication
+    pub username: Option<String>,
+    /// Password/token for HTTPS authentication
+    pub password: Option<String>,
+    /// Repository description
+    pub description: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImportResultInfo {
+    pub name: String,
+    pub source_url: String,
+    pub branches: usize,
+    pub tags: usize,
+    pub elapsed_secs: f64,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl From<opengit_core::import::ImportResult> for ImportResultInfo {
+    fn from(r: opengit_core::import::ImportResult) -> Self {
+        Self {
+            name: r.name,
+            source_url: r.source_url,
+            branches: r.branches,
+            tags: r.tags,
+            elapsed_secs: r.elapsed_secs,
+            success: r.success,
+            error: r.error,
+        }
+    }
+}
+
+async fn import_repo(
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+    Json(body): Json<ImportRequestBody>,
+) -> Result<Json<ImportResultInfo>, StatusCode> {
+    // Only humans can import repos
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    let import_req = ImportRequest {
+        url: body.url,
+        name: body.name,
+        source: ImportSource::Git,
+        mirror: body.mirror,
+        username: body.username,
+        password: body.password,
+        ssh_key: None,
+        description: body.description,
+    };
+
+    let engine = ImportEngine::new(&state.config.repos_dir);
+    let result = engine.import_repo(&import_req).await;
+    let info = ImportResultInfo::from(result.clone());
+
+    // Store status
+    {
+        let mut status = state.import_status.write().await;
+        status.push(info.clone());
+    }
+
+    if result.success {
+        tracing::info!("Repo imported: {} from {} by {}", result.name, result.source_url, caller.0);
+        Ok(Json(info))
+    } else {
+        tracing::warn!("Import failed: {} — {}", result.name, result.error.as_deref().unwrap_or("unknown"));
+        Err(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GiteaMigrateRequest {
+    /// Gitea server URL
+    pub server_url: String,
+    /// Gitea API token
+    pub token: String,
+    /// Owner/org to migrate (optional)
+    pub owner: Option<String>,
+    /// Specific repos (optional)
+    #[serde(default)]
+    pub repos: Vec<String>,
+    /// Include labels
+    #[serde(default = "default_true")]
+    pub include_labels: bool,
+    /// Include milestones
+    #[serde(default = "default_true")]
+    pub include_milestones: bool,
+    /// Include releases
+    #[serde(default)]
+    pub include_releases: bool,
+    /// Name prefix for imported repos
+    #[serde(default)]
+    pub name_prefix: String,
+    /// Clone username
+    pub clone_username: Option<String>,
+    /// Clone password
+    pub clone_password: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MigrationResultInfo {
+    pub total: usize,
+    pub imported: usize,
+    pub failed: usize,
+    pub results: Vec<ImportResultInfo>,
+    pub elapsed_secs: f64,
+}
+
+async fn migrate_gitea(
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+    Json(body): Json<GiteaMigrateRequest>,
+) -> Result<Json<MigrationResultInfo>, StatusCode> {
+    // Only admins can run migrations
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    let config = GiteaMigrateConfig {
+        server_url: body.server_url,
+        token: body.token,
+        owner: body.owner,
+        repos: body.repos,
+        include_labels: body.include_labels,
+        include_milestones: body.include_milestones,
+        include_releases: body.include_releases,
+        include_issues: false,
+        clone_username: body.clone_username,
+        clone_password: body.clone_password,
+        name_prefix: body.name_prefix,
+    };
+
+    let result = opengit_core::import::migrate_from_gitea(&config, &state.config.repos_dir).await;
+
+    let info = MigrationResultInfo {
+        total: result.total,
+        imported: result.imported,
+        failed: result.failed,
+        results: result.results.into_iter().map(ImportResultInfo::from).collect(),
+        elapsed_secs: result.elapsed_secs,
+    };
+
+    // Store all results
+    {
+        let mut status = state.import_status.write().await;
+        status.extend(info.results.clone());
+    }
+
+    tracing::info!(
+        "Gitea migration completed by {}: {}/{} imported",
+        caller.0, info.imported, info.total
+    );
+
+    Ok(Json(info))
+}
+
+async fn import_status(
+    State(state): State<SharedState>,
+    Extension(_caller): Extension<IdentityName>,
+) -> Json<Vec<ImportResultInfo>> {
+    let status = state.import_status.read().await;
+    Json(status.clone())
 }
