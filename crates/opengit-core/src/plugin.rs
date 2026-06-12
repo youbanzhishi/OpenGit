@@ -82,6 +82,7 @@ impl PluginsFile {
 ///   protected_branches = ["master", "main", "release/*"]
 ///   allow_force_push = false
 ///   allow_delete = false
+#[allow(dead_code)]
 pub struct BranchProtectionPlugin {
     protected_branches: Vec<String>,
     allow_force_push: bool,
