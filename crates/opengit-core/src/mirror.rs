@@ -67,7 +67,12 @@ impl MirrorManager {
     /// Create a new mirror manager from config
     pub fn new(mirrors: &MirrorsFile) -> Self {
         Self {
-            targets: mirrors.mirrors.iter().filter(|m| m.enabled).cloned().collect(),
+            targets: mirrors
+                .mirrors
+                .iter()
+                .filter(|m| m.enabled)
+                .cloned()
+                .collect(),
         }
     }
 
