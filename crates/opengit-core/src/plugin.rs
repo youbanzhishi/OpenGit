@@ -5,9 +5,7 @@
 //!
 //! Plugins are configured in config/plugins.toml and loaded at startup.
 
-use crate::audit::AuditLog;
-use crate::hook::{HookContext, HookType, RefUpdate};
-use crate::policy::Permission;
+use crate::hook::{HookContext, RefUpdate};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -206,7 +204,8 @@ impl HookPlugin for PushLimitPlugin {
         // Check repo size against limits
         // This is a simplified check — full implementation would
         // inspect pack data for individual file sizes
-        let repo_path = ctx.env.get("OPENGIT_REPO_PATH").unwrap_or(&".".to_string());
+        let default_path = ".".to_string();
+        let repo_path = ctx.env.get("OPENGIT_REPO_PATH").unwrap_or(&default_path);
         let repo_total = get_dir_size_mb(repo_path).unwrap_or(0);
 
         if repo_total > self.max_total_size_mb {
