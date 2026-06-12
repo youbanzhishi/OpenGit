@@ -301,8 +301,7 @@ async fn main() -> Result<()> {
         audit_file: PathBuf::from("data/audit.json"),
     };
 
-    let server =
-        russh::server::Server::new(Arc::new(server_state), config, cli.ssh_bind.parse()?);
+    let server = russh::server::Server::new(Arc::new(server_state), config, cli.ssh_bind.parse()?);
 
     tracing::info!("🐉 OpenGit SSH Server listening on {}", cli.ssh_bind);
     server.run().await?;
