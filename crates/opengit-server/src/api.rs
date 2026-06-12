@@ -24,7 +24,7 @@ use crate::config::ServerConfig;
 use crate::middleware::{require_auth, smart_http_auth, IdentityName};
 use crate::stats::ServerStats;
 use crate::webhook::WebhookConfig;
-use opengit_core::mirror::{MirrorManager, MirrorsFile, MirrorTarget};
+use opengit_core::mirror::{MirrorManager, MirrorTarget, MirrorsFile};
 
 pub struct AppState {
     pub config: ServerConfig,
@@ -987,7 +987,6 @@ impl AddWebhookRequest {
         }
     }
 }
-
 
 // ─── Mirror endpoints ────────────────────────────────────────────────
 
