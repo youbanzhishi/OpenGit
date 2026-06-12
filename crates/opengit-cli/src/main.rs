@@ -440,10 +440,19 @@ async fn main() -> Result<()> {
             description,
         } => {
             let result = client
-                .import_repo(&url, name.as_deref(), username.as_deref(), password.as_deref(), description.as_deref())
+                .import_repo(
+                    &url,
+                    name.as_deref(),
+                    username.as_deref(),
+                    password.as_deref(),
+                    description.as_deref(),
+                )
                 .await?;
             if result.success {
-                println!("✅ Imported: {} ({} branches, {} tags)", result.name, result.branches, result.tags);
+                println!(
+                    "✅ Imported: {} ({} branches, {} tags)",
+                    result.name, result.branches, result.tags
+                );
                 println!("   Source: {}", result.source_url);
                 println!("   Time: {:.1}s", result.elapsed_secs);
             } else {
@@ -496,7 +505,11 @@ async fn main() -> Result<()> {
                 println!("\n❌ Failed imports:");
                 for r in &result.results {
                     if !r.success {
-                        println!("   {} — {}", r.name, r.error.as_deref().unwrap_or("unknown"));
+                        println!(
+                            "   {} — {}",
+                            r.name,
+                            r.error.as_deref().unwrap_or("unknown")
+                        );
                     }
                 }
             }
@@ -506,7 +519,10 @@ async fn main() -> Result<()> {
             if status.is_empty() {
                 println!("No imports recorded.");
             } else {
-                println!("{:<25} {:<8} {:<8} {:<8} RESULT", "NAME", "BRANCHES", "TAGS", "TIME");
+                println!(
+                    "{:<25} {:<8} {:<8} {:<8} RESULT",
+                    "NAME", "BRANCHES", "TAGS", "TIME"
+                );
                 for r in &status {
                     println!(
                         "{:<25} {:<8} {:<8} {:<8.1} {}",

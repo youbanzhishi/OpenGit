@@ -204,7 +204,10 @@ impl ImportEngine {
     /// Import a single repository from a Git URL
     pub async fn import_repo(&self, req: &ImportRequest) -> ImportResult {
         let start = Instant::now();
-        let name = req.name.clone().unwrap_or_else(|| Self::derive_name(&req.url));
+        let name = req
+            .name
+            .clone()
+            .unwrap_or_else(|| Self::derive_name(&req.url));
 
         match self.do_import(req, &name).await {
             Ok((path, branches, tags)) => ImportResult {
@@ -231,11 +234,7 @@ impl ImportEngine {
     }
 
     /// Perform the actual git clone --mirror
-    async fn do_import(
-        &self,
-        req: &ImportRequest,
-        name: &str,
-    ) -> Result<(PathBuf, usize, usize)> {
+    async fn do_import(&self, req: &ImportRequest, name: &str) -> Result<(PathBuf, usize, usize)> {
         // Ensure repos dir exists
         std::fs::create_dir_all(&self.repos_dir)
             .with_context(|| format!("Failed to create repos dir: {}", self.repos_dir.display()))?;
@@ -252,11 +251,17 @@ impl ImportEngine {
         }
 
         // Build the clone URL with authentication
-        let clone_url = self.build_clone_url(&req.url, req.username.as_deref(), req.password.as_deref());
+        let clone_url =
+            self.build_clone_url(&req.url, req.username.as_deref(), req.password.as_deref());
 
         // Run git clone --mirror
         let output = tokio::process::Command::new("git")
-            .args(["clone", "--mirror", &clone_url, &repo_path.to_string_lossy()])
+            .args([
+                "clone",
+                "--mirror",
+                &clone_url,
+                &repo_path.to_string_lossy(),
+            ])
             .env("GIT_TERMINAL_PROMPT", "0") // Never prompt for credentials
             .output()
             .await
@@ -429,7 +434,10 @@ impl GiteaClient {
                 data: Vec<GiteaRepo>,
             }
 
-            let result: SearchResponse = resp.json().await.context("Failed to parse Gitea response")?;
+            let result: SearchResponse = resp
+                .json()
+                .await
+                .context("Failed to parse Gitea response")?;
 
             let count = result.data.len();
             all_repos.extend(result.data);
@@ -454,7 +462,10 @@ impl GiteaClient {
                 "{}/api/v1/repos/search?uid={}&limit={}&page={}",
                 // We search by owner name — Gitea doesn't have a direct UID lookup,
                 // so we use the generic search and filter
-                self.server_url, owner, PER_PAGE, page
+                self.server_url,
+                owner,
+                PER_PAGE,
+                page
             );
 
             let resp = self
@@ -476,7 +487,10 @@ impl GiteaClient {
                 data: Vec<GiteaRepo>,
             }
 
-            let result: SearchResponse = resp.json().await.context("Failed to parse Gitea response")?;
+            let result: SearchResponse = resp
+                .json()
+                .await
+                .context("Failed to parse Gitea response")?;
 
             let count = result.data.len();
             // Filter by owner
@@ -498,10 +512,7 @@ impl GiteaClient {
 
     /// Fetch labels for a repo
     pub async fn get_labels(&self, owner: &str, repo: &str) -> Result<Vec<GiteaLabel>> {
-        let url = format!(
-            "{}/api/v1/repos/{}/{}/labels",
-            self.server_url, owner, repo
-        );
+        let url = format!("{}/api/v1/repos/{}/{}/labels", self.server_url, owner, repo);
         let resp = self
             .http
             .get(&url)
@@ -635,7 +646,10 @@ pub async fn migrate_from_gitea(
             source: ImportSource::Gitea,
             mirror: true,
             username: config.clone_username.clone(),
-            password: config.clone_password.clone().or_else(|| Some(config.token.clone())),
+            password: config
+                .clone_password
+                .clone()
+                .or_else(|| Some(config.token.clone())),
             ssh_key: None,
             description: gitea_repo.description.clone(),
         };
@@ -643,13 +657,22 @@ pub async fn migrate_from_gitea(
         let result = engine.import_repo(&import_req).await;
 
         // If import succeeded and metadata is requested, fetch it
-        if result.success && (config.include_labels || config.include_milestones || config.include_releases) {
+        if result.success
+            && (config.include_labels || config.include_milestones || config.include_releases)
+        {
             let owner = &gitea_repo.owner.login;
             let _metadata = client.get_metadata(owner, &gitea_repo.name, config).await;
             // Metadata is saved alongside the repo as a JSON file
-            if let Ok(repo_path) = engine.repos_dir.join(format!("{}.git", result.name)).canonicalize() {
+            if let Ok(repo_path) = engine
+                .repos_dir
+                .join(format!("{}.git", result.name))
+                .canonicalize()
+            {
                 let meta_path = repo_path.join("opengit-gitea-metadata.json");
-                let _ = std::fs::write(meta_path, serde_json::to_string_pretty(&_metadata).unwrap_or_default());
+                let _ = std::fs::write(
+                    meta_path,
+                    serde_json::to_string_pretty(&_metadata).unwrap_or_default(),
+                );
             }
         }
 
@@ -767,11 +790,7 @@ mod tests {
     #[test]
     fn test_build_clone_url_no_auth() {
         let engine = ImportEngine::new("/tmp/repos");
-        let url = engine.build_clone_url(
-            "https://github.com/user/repo.git",
-            None,
-            None,
-        );
+        let url = engine.build_clone_url("https://github.com/user/repo.git", None, None);
         assert_eq!(url, "https://github.com/user/repo.git");
     }
 

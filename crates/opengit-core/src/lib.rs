@@ -21,9 +21,9 @@ pub use audit::{AuditEntry, AuditLog};
 pub use hook::{HookContext, HookPipeline, HookResult};
 pub use identity::{Identity, IdentityKind, Token};
 pub use import::{
-    GiteaClient, GiteaLabel, GiteaMigrateConfig, GiteaMetadata, GiteaMilestone, GiteaRelease,
-    GiteaRepo, ImportEngine, ImportRequest, ImportResult, ImportSource, MigrationResult,
-    migrate_from_gitea,
+    migrate_from_gitea, GiteaClient, GiteaLabel, GiteaMetadata, GiteaMigrateConfig, GiteaMilestone,
+    GiteaRelease, GiteaRepo, ImportEngine, ImportRequest, ImportResult, ImportSource,
+    MigrationResult,
 };
 pub use mirror::{MirrorManager, MirrorTarget, MirrorsFile};
 pub use plugin::{HookPlugin, PluginManager, PluginsFile};

@@ -24,8 +24,8 @@ use crate::config::ServerConfig;
 use crate::middleware::{require_auth, smart_http_auth, IdentityName};
 use crate::stats::ServerStats;
 use crate::webhook::WebhookConfig;
+use opengit_core::import::{GiteaMigrateConfig, ImportEngine, ImportRequest, ImportSource};
 use opengit_core::mirror::{MirrorTarget, MirrorsFile};
-use opengit_core::import::{ImportRequest, ImportSource, GiteaMigrateConfig, ImportEngine};
 
 pub struct AppState {
     pub config: ServerConfig,
@@ -1085,7 +1085,6 @@ pub struct AddMirrorRequest {
     pub refs: Option<Vec<String>>,
 }
 
-
 // ─── Import & Migration endpoints (P6/P7) ───────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1170,10 +1169,19 @@ async fn import_repo(
     }
 
     if result.success {
-        tracing::info!("Repo imported: {} from {} by {}", result.name, result.source_url, caller.0);
+        tracing::info!(
+            "Repo imported: {} from {} by {}",
+            result.name,
+            result.source_url,
+            caller.0
+        );
         Ok(Json(info))
     } else {
-        tracing::warn!("Import failed: {} — {}", result.name, result.error.as_deref().unwrap_or("unknown"));
+        tracing::warn!(
+            "Import failed: {} — {}",
+            result.name,
+            result.error.as_deref().unwrap_or("unknown")
+        );
         Err(StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
@@ -1250,7 +1258,11 @@ async fn migrate_gitea(
         total: result.total,
         imported: result.imported,
         failed: result.failed,
-        results: result.results.into_iter().map(ImportResultInfo::from).collect(),
+        results: result
+            .results
+            .into_iter()
+            .map(ImportResultInfo::from)
+            .collect(),
         elapsed_secs: result.elapsed_secs,
     };
 
@@ -1262,7 +1274,9 @@ async fn migrate_gitea(
 
     tracing::info!(
         "Gitea migration completed by {}: {}/{} imported",
-        caller.0, info.imported, info.total
+        caller.0,
+        info.imported,
+        info.total
     );
 
     Ok(Json(info))
