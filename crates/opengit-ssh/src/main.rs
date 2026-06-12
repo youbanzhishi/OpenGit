@@ -94,7 +94,7 @@ fn main() -> Result<()> {
         }
         Commands::Config {
             port,
-            repos: _repos,
+            repos,
         } => {
             let ak_path = PathBuf::from("config/ssh/authorized_keys");
             print!("{}", generate_sshd_config(port, &repos, &ak_path));
