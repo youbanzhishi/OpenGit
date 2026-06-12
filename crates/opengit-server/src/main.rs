@@ -1,7 +1,7 @@
-//! OpenGit Server — Lightweight private Git service, agent-first
+//! OpenGit Server - Lightweight private Git service, agent-first
 //!
 //! P4: SSH transport + Hook Plugin System.
-//!     Dual-server: HTTP (Smart HTTP + API) + SSH (git transport).
+//! P5: Docker deployment + Repository mirroring.
 
 use anyhow::Result;
 use clap::Parser;
@@ -58,6 +58,11 @@ async fn main() -> Result<()> {
     let plugin_manager = opengit_core::PluginManager::load_from_config(&plugins);
     let plugin_names = plugin_manager.plugin_names();
 
+    // Load mirrors
+    let mirrors = opengit_core::MirrorsFile::load(&config.mirror_file)?;
+    let mirror_manager = opengit_core::MirrorManager::new(&mirrors);
+    let mirror_names = mirror_manager.mirror_names();
+
     tracing::info!("🐉 OpenGit starting...");
     tracing::info!("   Repos:    {}", config.repos_dir.display());
     tracing::info!("   Bind:     {}", config.bind);
@@ -66,6 +71,11 @@ async fn main() -> Result<()> {
     tracing::info!("   Webhook:  {}", config.webhook_file.display());
     tracing::info!("   Audit:    {}", config.audit_file.display());
     tracing::info!("   Plugins:  {}", plugin_names.join(", "));
+    if mirror_names.is_empty() {
+        tracing::info!("   Mirrors:  none configured");
+    } else {
+        tracing::info!("   Mirrors:  {}", mirror_names.join(", "));
+    }
 
     let ssh_enabled = cli.ssh || !config.ssh_bind.is_empty();
     if ssh_enabled {
