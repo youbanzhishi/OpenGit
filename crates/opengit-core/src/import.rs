@@ -328,7 +328,7 @@ impl ImportEngine {
         let repo = git2::Repository::open(repo_path)?;
 
         // Set default branch to main or master
-        let config = repo.config()?;
+        let mut config = repo.config()?;
         config.set_str("core.logallrefupdates", "true")?;
 
         Ok(())
@@ -816,3 +816,4 @@ mod tests {
         assert_eq!(url, "git@github.com:user/repo.git");
     }
 }
+
