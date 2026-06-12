@@ -37,5 +37,3 @@ tokio-util = { version = "0.7", features = ["io"] }
 base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 clap = { version = "4", features = ["derive", "env"] }
-russh = "0.49"
-russh-keys = "0.49"
