@@ -10,8 +10,8 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use opengit_core::identity::IdentityStore;
 use russh::keys::ssh_key;
-use russh::server::{Auth, Handler, Msg, Response, Session};
-use russh::{Channel, ChannelMsg, MethodSet, Server};
+use russh::server::{Auth, Handler, Msg, Session};
+use russh::{Channel, MethodSet, Server};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -302,7 +302,7 @@ async fn main() -> Result<()> {
     };
 
     let server =
-        russh::server::Server::new(Arc::new(server_state), config, (cli.ssh_bind.parse()?));
+        russh::server::Server::new(Arc::new(server_state), config, cli.ssh_bind.parse()?);
 
     tracing::info!("🐉 OpenGit SSH Server listening on {}", cli.ssh_bind);
     server.run().await?;
