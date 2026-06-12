@@ -1,6 +1,7 @@
 //! REST API — Repository management, policy, identity, webhook, and stats endpoints
 //!
 //! P3: Added repo size endpoint, bulk repo operations, ref-specific webhooks.
+//! P5: Added mirror management endpoints.
 
 use axum::{
     extract::{Extension, Path, State},
@@ -23,6 +24,7 @@ use crate::config::ServerConfig;
 use crate::middleware::{require_auth, smart_http_auth, IdentityName};
 use crate::stats::ServerStats;
 use crate::webhook::WebhookConfig;
+use opengit_core::mirror::{MirrorManager, MirrorsFile, MirrorTarget};
 
 pub struct AppState {
     pub config: ServerConfig,
@@ -31,6 +33,8 @@ pub struct AppState {
     pub audit_log: AuditLog,
     pub webhooks: RwLock<Vec<WebhookConfig>>,
     pub stats: ServerStats,
+    pub mirrors: RwLock<MirrorsFile>,
+    pub mirror_manager: MirrorManager,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -65,6 +69,13 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         AuditLog::new()
     };
 
+    let mirrors = if config.mirror_file.exists() {
+        MirrorsFile::load(&config.mirror_file)?
+    } else {
+        MirrorsFile::default()
+    };
+    let mirror_manager = MirrorManager::new(&mirrors);
+
     let state = Arc::new(AppState {
         config: config.clone(),
         policy_engine: RwLock::new(policy_engine),
@@ -72,6 +83,8 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         audit_log,
         webhooks: RwLock::new(webhooks),
         stats: ServerStats::new(),
+        mirrors: RwLock::new(mirrors),
+        mirror_manager,
     });
 
     // Smart HTTP routes — with optional auth middleware
@@ -116,6 +129,8 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         .route("/webhooks", get(list_webhooks).post(add_webhook))
         .route("/webhooks/{idx}", delete(delete_webhook))
         .route("/stats", get(get_stats))
+        .route("/mirrors", get(list_mirrors).post(add_mirror))
+        .route("/mirrors/{idx}", delete(delete_mirror))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     let app = Router::new()
@@ -971,4 +986,101 @@ impl AddWebhookRequest {
             active: true,
         }
     }
+}
+
+
+// ─── Mirror endpoints ────────────────────────────────────────────────
+
+async fn list_mirrors(State(state): State<SharedState>) -> Json<Vec<MirrorTargetInfo>> {
+    let mirrors = state.mirrors.read().await;
+    let infos: Vec<MirrorTargetInfo> = mirrors
+        .mirrors
+        .iter()
+        .map(|m| MirrorTargetInfo {
+            name: m.name.clone(),
+            url: m.url.clone(),
+            repos: m.repos.clone(),
+            refs: m.refs.clone(),
+            enabled: m.enabled,
+        })
+        .collect();
+    Json(infos)
+}
+
+async fn add_mirror(
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+    Json(req): Json<AddMirrorRequest>,
+) -> Result<StatusCode, StatusCode> {
+    // Only admins can add mirrors
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    {
+        let mut mirrors = state.mirrors.write().await;
+        mirrors.mirrors.push(MirrorTarget {
+            name: req.name,
+            url: req.url,
+            repos: req.repos.unwrap_or_default(),
+            refs: req.refs.unwrap_or_default(),
+            enabled: true,
+        });
+        if let Err(e) = mirrors.save_to_file(&state.config.mirror_file) {
+            tracing::error!("Failed to save mirrors file: {}", e);
+        }
+    }
+
+    tracing::info!("Mirror added by {}", caller.0);
+    Ok(StatusCode::CREATED)
+}
+
+async fn delete_mirror(
+    Path(idx): Path<usize>,
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+) -> Result<StatusCode, StatusCode> {
+    // Only admins can delete mirrors
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    {
+        let mut mirrors = state.mirrors.write().await;
+        if idx >= mirrors.mirrors.len() {
+            return Err(StatusCode::NOT_FOUND);
+        }
+        mirrors.mirrors.remove(idx);
+        if let Err(e) = mirrors.save_to_file(&state.config.mirror_file) {
+            tracing::error!("Failed to save mirrors file: {}", e);
+        }
+    }
+
+    tracing::info!("Mirror {} deleted by {}", idx, caller.0);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MirrorTargetInfo {
+    pub name: String,
+    pub url: String,
+    pub repos: Vec<String>,
+    pub refs: Vec<String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AddMirrorRequest {
+    pub name: String,
+    pub url: String,
+    pub repos: Option<Vec<String>>,
+    pub refs: Option<Vec<String>>,
 }
