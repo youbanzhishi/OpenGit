@@ -1,0 +1,11 @@
+target/
+.git/
+.gitignore
+*.md
+!config/
+repos/
+data/
+trash/
+*.swp
+*.swo
+.DS_Store
