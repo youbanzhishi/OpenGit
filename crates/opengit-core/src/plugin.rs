@@ -171,6 +171,7 @@ impl HookPlugin for BranchProtectionPlugin {
 /// Settings:
 ///   max_file_size_mb = 100
 ///   max_total_size_mb = 500
+#[allow(dead_code)]
 pub struct PushLimitPlugin {
     max_file_size_mb: u64,
     max_total_size_mb: u64,
