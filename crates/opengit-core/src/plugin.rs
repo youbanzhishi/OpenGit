@@ -5,7 +5,7 @@
 //!
 //! Plugins are configured in config/plugins.toml and loaded at startup.
 
-use crate::hook::{HookContext, RefUpdate};
+use crate::hook::{HookContext, HookType, RefUpdate};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
