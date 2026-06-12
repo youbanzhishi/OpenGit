@@ -5,7 +5,7 @@
 //!
 //! Plugins are configured in config/plugins.toml and loaded at startup.
 
-use crate::hook::{HookContext, HookType, RefUpdate};
+use crate::hook::{HookContext, RefUpdate};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -317,6 +317,7 @@ impl Default for PluginManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hook::HookType;
 
     #[test]
     fn test_branch_protection_protected() {
