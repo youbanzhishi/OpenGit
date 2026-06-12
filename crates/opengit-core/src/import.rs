@@ -816,4 +816,3 @@ mod tests {
         assert_eq!(url, "git@github.com:user/repo.git");
     }
 }
-
