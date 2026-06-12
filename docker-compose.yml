@@ -1,0 +1,28 @@
+# OpenGit Docker Compose
+# P5: Docker deployment support
+#
+# Usage:
+#   docker compose up -d        # Start OpenGit
+#   docker compose logs -f      # View logs
+#   docker compose down         # Stop
+
+services:
+  opengit:
+    build: .
+    container_name: opengit
+    restart: unless-stopped
+    ports:
+      - "9418:9418"    # HTTP (Smart HTTP + API)
+      # - "2222:22"    # SSH (uncomment to enable)
+    volumes:
+      - ./repos:/home/opengit/repos
+      - ./data:/home/opengit/data
+      - ./config:/home/opengit/config
+      - ./ssh-keys:/home/opengit/.ssh  # SSH keys for mirroring
+    environment:
+      - RUST_LOG=opengit=info,opengit_core=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9418/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
