@@ -236,14 +236,12 @@ fn parse_git_command(input: &str) -> (Option<&str>, String) {
 /// Extract repo name from quoted argument: 'repo' or "repo" or repo
 fn extract_repo_name(arg: &str) -> String {
     let trimmed = arg.trim();
-    trimmed
-        .trim_start_matches(''')
-        .trim_end_matches(''')
-        .trim_start_matches('"')
-        .trim_end_matches('"')
-        .trim_start_matches('/')
-        .trim_end_matches('/')
-        .to_string()
+    let s = trimmed
+        .strip_prefix('\'')
+        .and_then(|s| s.strip_suffix('\''))
+        .or_else(|| trimmed.strip_prefix('"').and_then(|s| s.strip_suffix('"')))
+        .unwrap_or(trimmed);
+    s.trim_start_matches('/').trim_end_matches('/').to_string()
 }
 
 #[tokio::main]
