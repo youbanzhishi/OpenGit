@@ -55,7 +55,10 @@ impl Server for SshServerState {
             state: Arc::new(SshServerState {
                 repos_dir: self.repos_dir.clone(),
                 identity_store: RwLock::new(
-                    self.identity_store.try_read().map(|s| s.clone()).unwrap_or_default(),
+                    self.identity_store
+                        .try_read()
+                        .map(|s| s.clone())
+                        .unwrap_or_default(),
                 ),
                 policy_file: self.policy_file.clone(),
                 audit_file: self.audit_file.clone(),
@@ -88,9 +91,7 @@ impl Handler for SshSession {
         user: &str,
         public_key: &ssh_key::PublicKey,
     ) -> Result<Auth, Self::Error> {
-        let key_fingerprint = public_key
-            .fingerprint(ssh_key::HashAlg::Sha256)
-            .to_string();
+        let key_fingerprint = public_key.fingerprint(ssh_key::HashAlg::Sha256).to_string();
 
         tracing::info!("SSH auth attempt: user={user}, key={key_fingerprint}");
 
@@ -133,14 +134,16 @@ impl Handler for SshSession {
 
         match command {
             Some(cmd) => {
-                let repo_path = self
-                    .state
-                    .repos_dir
-                    .join(format!("{repo_name}.git"));
+                let repo_path = self.state.repos_dir.join(format!("{repo_name}.git"));
 
                 if !repo_path.exists() {
-                    let _ = channel.data(format!("Repository not found: {repo_name}
-").as_bytes());
+                    let _ = channel.data(
+                        format!(
+                            "Repository not found: {repo_name}
+"
+                        )
+                        .as_bytes(),
+                    );
                     let _ = channel.eof();
                     return Ok(true);
                 }
@@ -153,11 +156,8 @@ impl Handler for SshSession {
                     } else {
                         opengit_core::PolicyEngine::new()
                     };
-                    let result = engine.evaluate(
-                        &repo_name,
-                        &identity,
-                        opengit_core::policy::Action::Push,
-                    );
+                    let result =
+                        engine.evaluate(&repo_name, &identity, opengit_core::policy::Action::Push);
                     if !result.is_allowed() {
                         let _ = channel.data(
                             format!(
@@ -201,8 +201,13 @@ impl Handler for SshSession {
                 let _ = channel.eof();
             }
             None => {
-                let _ = channel.data(format!("Unsupported command: {program}
-").as_bytes());
+                let _ = channel.data(
+                    format!(
+                        "Unsupported command: {program}
+"
+                    )
+                    .as_bytes(),
+                );
                 let _ = channel.eof();
             }
         }
@@ -254,7 +259,12 @@ async fn main() -> Result<()> {
 
     tracing::info!("🐉 OpenGit SSH Server starting...");
     tracing::info!("   SSH bind:  {}", cli.ssh_bind);
-    tracing::info!("   Repos:     {}", cli.repos_dir.as_ref().map_or("./repos", |p| p.display().to_string()));
+    tracing::info!(
+        "   Repos:     {}",
+        cli.repos_dir
+            .as_ref()
+            .map_or("./repos", |p| p.display().to_string())
+    );
 
     let repos_dir = cli.repos_dir.unwrap_or_else(|| PathBuf::from("./repos"));
 
@@ -278,8 +288,9 @@ async fn main() -> Result<()> {
     }
 
     let config = russh::server::Config {
-        keys: vec![russh_keys::load_secret_key(&cli.host_key)
-            .context("Failed to load SSH host key")?],
+        keys: vec![
+            russh_keys::load_secret_key(&cli.host_key).context("Failed to load SSH host key")?
+        ],
         ..Default::default()
     };
 
@@ -290,7 +301,8 @@ async fn main() -> Result<()> {
         audit_file: PathBuf::from("data/audit.json"),
     };
 
-    let server = russh::server::Server::new(Arc::new(server_state), config, (cli.ssh_bind.parse()?));
+    let server =
+        russh::server::Server::new(Arc::new(server_state), config, (cli.ssh_bind.parse()?));
 
     tracing::info!("🐉 OpenGit SSH Server listening on {}", cli.ssh_bind);
     server.run().await?;

@@ -21,32 +21,20 @@ pub trait HookPlugin: Send + Sync {
 
     /// Evaluate a pre-receive hook.
     /// Return None to allow, Some(reason) to deny.
-    fn pre_receive(
-        &self,
-        ctx: &HookContext,
-        updates: &[RefUpdate],
-    ) -> Option<String> {
+    fn pre_receive(&self, ctx: &HookContext, updates: &[RefUpdate]) -> Option<String> {
         let _ = (ctx, updates);
         None
     }
 
     /// Evaluate a single ref update (update hook).
     /// Return None to allow, Some(reason) to deny.
-    fn update(
-        &self,
-        ctx: &HookContext,
-        update: &RefUpdate,
-    ) -> Option<String> {
+    fn update(&self, ctx: &HookContext, update: &RefUpdate) -> Option<String> {
         let _ = (ctx, update);
         None
     }
 
     /// Post-receive notification (cannot deny).
-    fn post_receive(
-        &self,
-        ctx: &HookContext,
-        updates: &[RefUpdate],
-    ) {
+    fn post_receive(&self, ctx: &HookContext, updates: &[RefUpdate]) {
         let _ = (ctx, updates);
     }
 }
@@ -78,7 +66,9 @@ pub struct PluginsFile {
 impl PluginsFile {
     pub fn load(path: &std::path::Path) -> anyhow::Result<Self> {
         if !path.exists() {
-            return Ok(Self { plugins: Vec::new() });
+            return Ok(Self {
+                plugins: Vec::new(),
+            });
         }
         let content = std::fs::read_to_string(path)?;
         let config: PluginsFile = toml::from_str(&content)?;
@@ -130,9 +120,7 @@ impl BranchProtectionPlugin {
     }
 
     fn is_protected(&self, ref_name: &str) -> bool {
-        let branch_name = ref_name
-            .strip_prefix("refs/heads/")
-            .unwrap_or(ref_name);
+        let branch_name = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
 
         self.protected_branches.iter().any(|pattern| {
             if pattern.ends_with("/*") {
@@ -150,11 +138,7 @@ impl HookPlugin for BranchProtectionPlugin {
         "branch-protection"
     }
 
-    fn pre_receive(
-        &self,
-        _ctx: &HookContext,
-        updates: &[RefUpdate],
-    ) -> Option<String> {
+    fn pre_receive(&self, _ctx: &HookContext, updates: &[RefUpdate]) -> Option<String> {
         let zero_sha = "0000000000000000000000000000000000000000";
 
         for update in updates {
@@ -218,11 +202,7 @@ impl HookPlugin for PushLimitPlugin {
         "push-limit"
     }
 
-    fn pre_receive(
-        &self,
-        ctx: &HookContext,
-        _updates: &[RefUpdate],
-    ) -> Option<String> {
+    fn pre_receive(&self, ctx: &HookContext, _updates: &[RefUpdate]) -> Option<String> {
         // Check repo size against limits
         // This is a simplified check — full implementation would
         // inspect pack data for individual file sizes
@@ -294,11 +274,7 @@ impl PluginManager {
 
     /// Run all plugins for pre-receive hook
     /// Returns the first denial reason, or None if all allow
-    pub fn run_pre_receive(
-        &self,
-        ctx: &HookContext,
-        updates: &[RefUpdate],
-    ) -> Option<String> {
+    pub fn run_pre_receive(&self, ctx: &HookContext, updates: &[RefUpdate]) -> Option<String> {
         for plugin in &self.plugins {
             if let Some(reason) = plugin.pre_receive(ctx, updates) {
                 tracing::warn!("Plugin '{}' denied: {reason}", plugin.name());
@@ -309,11 +285,7 @@ impl PluginManager {
     }
 
     /// Run all plugins for update hook
-    pub fn run_update(
-        &self,
-        ctx: &HookContext,
-        update: &RefUpdate,
-    ) -> Option<String> {
+    pub fn run_update(&self, ctx: &HookContext, update: &RefUpdate) -> Option<String> {
         for plugin in &self.plugins {
             if let Some(reason) = plugin.update(ctx, update) {
                 tracing::warn!("Plugin '{}' denied: {reason}", plugin.name());
@@ -324,11 +296,7 @@ impl PluginManager {
     }
 
     /// Run all plugins for post-receive hook
-    pub fn run_post_receive(
-        &self,
-        ctx: &HookContext,
-        updates: &[RefUpdate],
-    ) {
+    pub fn run_post_receive(&self, ctx: &HookContext, updates: &[RefUpdate]) {
         for plugin in &self.plugins {
             plugin.post_receive(ctx, updates);
         }
@@ -401,13 +369,11 @@ mod tests {
     #[test]
     fn test_plugin_manager_load() {
         let config = PluginsFile {
-            plugins: vec![
-                PluginConfig {
-                    name: "branch-protection".into(),
-                    enabled: true,
-                    settings: HashMap::new(),
-                },
-            ],
+            plugins: vec![PluginConfig {
+                name: "branch-protection".into(),
+                enabled: true,
+                settings: HashMap::new(),
+            }],
         };
 
         let manager = PluginManager::load_from_config(&config);
@@ -417,13 +383,11 @@ mod tests {
     #[test]
     fn test_plugin_disabled() {
         let config = PluginsFile {
-            plugins: vec![
-                PluginConfig {
-                    name: "branch-protection".into(),
-                    enabled: false,
-                    settings: HashMap::new(),
-                },
-            ],
+            plugins: vec![PluginConfig {
+                name: "branch-protection".into(),
+                enabled: false,
+                settings: HashMap::new(),
+            }],
         };
 
         let manager = PluginManager::load_from_config(&config);
