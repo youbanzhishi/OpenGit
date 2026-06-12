@@ -24,7 +24,7 @@ use crate::config::ServerConfig;
 use crate::middleware::{require_auth, smart_http_auth, IdentityName};
 use crate::stats::ServerStats;
 use crate::webhook::WebhookConfig;
-use opengit_core::mirror::{MirrorManager, MirrorTarget, MirrorsFile};
+use opengit_core::mirror::{MirrorsFile, MirrorTarget};
 
 pub struct AppState {
     pub config: ServerConfig,
@@ -34,7 +34,6 @@ pub struct AppState {
     pub webhooks: RwLock<Vec<WebhookConfig>>,
     pub stats: ServerStats,
     pub mirrors: RwLock<MirrorsFile>,
-    pub mirror_manager: MirrorManager,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -74,8 +73,6 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
     } else {
         MirrorsFile::default()
     };
-    let mirror_manager = MirrorManager::new(&mirrors);
-
     let state = Arc::new(AppState {
         config: config.clone(),
         policy_engine: RwLock::new(policy_engine),
@@ -84,7 +81,6 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         webhooks: RwLock::new(webhooks),
         stats: ServerStats::new(),
         mirrors: RwLock::new(mirrors),
-        mirror_manager,
     });
 
     // Smart HTTP routes — with optional auth middleware
@@ -987,6 +983,7 @@ impl AddWebhookRequest {
         }
     }
 }
+
 
 // ─── Mirror endpoints ────────────────────────────────────────────────
 
