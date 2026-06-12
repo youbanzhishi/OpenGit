@@ -23,3 +23,6 @@ audit_file = "data/audit.json"
 
 # Plugin configuration
 plugin_file = "config/plugins.toml"
+
+# Mirror configuration
+mirror_file = "config/mirrors.toml"
