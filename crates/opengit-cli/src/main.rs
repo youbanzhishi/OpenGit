@@ -894,6 +894,7 @@ impl ApiClient {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn migrate_gitea(
         &self,
         server_url: &str,
