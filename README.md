@@ -14,11 +14,12 @@ OpenGit was born from that incident. Every rule in its default policy is a lesso
 - 🤖 **Agent-First Design** — Default safe policies for AI agents; agents can only push by default
 - 👤 **Human-Friendly** — Humans get full control with audit logging on dangerous operations
 - 📦 **Zero Migration** — Reads existing Git bare repos directly, no import needed
-- 🔌 **Unlimited Extension** — WASM plugin system planned for custom workflows
+- 🔌 **Plugin System** — Hook plugins with trait-based extensibility (branch protection, push limits, custom rules)
 - 📊 **Full Audit Trail** — Every Git operation logged with identity, action, and result
 - ⚡ **Lightweight** — Single binary, zero database dependency, pure filesystem
 - 🔗 **Webhooks** — Post-receive notifications with HMAC-SHA256 signatures for CI/CD integration
 - 🖥️ **CLI Tool** — `og` command-line tool for managing your OpenGit server
+- 🔑 **SSH Gateway** — `opengit-sshd` manages system sshd with identity-mapped authorized_keys
 - 📡 **Streaming** — Smart HTTP with streaming pack transfer, prevents OOM on large repos
 - 💾 **Persistent State** — Identity, policy, and webhook configs survive server restarts
 - 📈 **Server Stats** — Atomic counters tracking pushes, clones, denials, webhooks, uptime
@@ -97,6 +98,82 @@ og webhooks add https://ci.example.com/hook --secret my-secret
 
 # Server stats
 og stats
+```
+
+## SSH Gateway (`opengit-sshd`)
+
+OpenGit provides an SSH gateway that integrates with the system's `sshd` for secure Git operations over SSH, with identity-based access control.
+
+```bash
+# Setup SSH configuration (generates sshd_config + authorized_keys)
+opengit-sshd setup --repos-dir /path/to/repos --identity-dir /path/to/identities
+
+# Print authorized_keys content for manual review
+opengit-sshd authorized-keys --identity-dir /path/to/identities
+
+# Print sshd_config content
+opengit-sshd config --repos-dir /path/to/repos
+```
+
+### How It Works
+
+1. Each OpenGit identity maps to a system SSH key in `authorized_keys`
+2. SSH keys use forced commands that set `OPENGIT_IDENTITY` environment variable
+3. The Smart HTTP pipeline reads this identity for permission evaluation
+4. No custom SSH server needed — leverages battle-tested system `sshd`
+
+## Hook Plugin System
+
+OpenGit includes a plugin system for extending hook behavior beyond the built-in policy engine.
+
+### Built-in Plugins
+
+| Plugin | Description |
+|--------|-------------|
+| **BranchProtection** | Enforces branch protection rules (e.g., no push to `main`/`master` by agents) |
+| **PushLimit** | Limits push frequency and file size per identity |
+
+### Plugin Configuration (`config/plugins.toml`)
+
+```toml
+[[plugin]]
+name = "branch_protection"
+enabled = true
+
+[plugin.config]
+protected_branches = ["main", "master"]
+allow_force_push = false
+
+[[plugin]]
+name = "push_limit"
+enabled = true
+
+[plugin.config]
+max_pushes_per_hour = 100
+max_file_size_mb = 50
+```
+
+### Custom Plugins
+
+Implement the `HookPlugin` trait to create custom plugins:
+
+```rust
+use opengit_core::plugin::{HookPlugin, HookContext, HookResult};
+
+struct MyPlugin;
+
+impl HookPlugin for MyPlugin {
+    fn name(&self) -> &str { "my_plugin" }
+    
+    fn on_pre_receive(&self, ctx: &HookContext) -> HookResult {
+        // Your logic here
+        Ok(())
+    }
+    
+    fn on_post_receive(&self, ctx: &HookContext) -> HookResult {
+        Ok(())
+    }
+}
 ```
 
 ## API
@@ -179,9 +256,14 @@ signature = "sha256=" + hmac.new(secret, payload, hashlib.sha256).hexdigest()
 │  Git Client   │────▶│  OpenGit     │     │  og CLI      │
 │  (agent/human)│     │  Server      │◀────│  Management  │
 └──────────────┘     │              │     └──────────────┘
-                     │ ┌──────────┐ │
-                     │ │ Policy   │ │  ← Permission engine
-                     │ │ Engine   │ │
+                     │ ┌──────────┐ │     ┌──────────────┐
+                     │ │ Policy   │ │     │ opengit-sshd │
+                     │ │ Engine   │ │     │ SSH Gateway  │
+                     │ └────┬─────┘ │     └──────┬───────┘
+                     │      │       │            │
+                     │ ┌────▼─────┐ │            │ identity-
+                     │ │ Plugin   │ │◀───────────┘ mapped
+                     │ │ System   │ │   authorized_keys
                      │ └────┬─────┘ │
                      │      │       │
                      │ ┌────▼─────┐ │
@@ -207,7 +289,8 @@ signature = "sha256=" + hmac.new(secret, payload, hashlib.sha256).hexdigest()
 | P1 | ✅ | Smart HTTP + Auth Middleware + Force Push Detection + REST API |
 | P2 | ✅ | Streaming + Persistent State + Webhooks + Stats |
 | P3 | ✅ | CLI Tool + Repo Size + Bulk Operations + Precise Webhook Refs |
-| P4 | 🔄 | SSH Protocol + WASM Plugins |
+| P4 | ✅ | SSH Gateway + Hook Plugin System (BranchProtection + PushLimit) |
+| P5 | 🔄 | Docker Deployment + Repository Mirroring |
 
 ## License
 
