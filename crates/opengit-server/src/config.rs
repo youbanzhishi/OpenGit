@@ -1,6 +1,7 @@
 //! Server configuration
 //!
 //! P4: Added SSH and plugin configuration.
+//! P5: Added mirror configuration.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -30,6 +31,9 @@ pub struct ServerConfig {
     /// Plugin config file path
     #[serde(default = "default_plugin_file")]
     pub plugin_file: PathBuf,
+    /// Mirror config file path
+    #[serde(default = "default_mirror_file")]
+    pub mirror_file: PathBuf,
 }
 
 fn default_ssh_host_key() -> PathBuf {
@@ -42,6 +46,10 @@ fn default_webhook_file() -> PathBuf {
 
 fn default_plugin_file() -> PathBuf {
     PathBuf::from("config/plugins.toml")
+}
+
+fn default_mirror_file() -> PathBuf {
+    PathBuf::from("config/mirrors.toml")
 }
 
 impl ServerConfig {
@@ -82,6 +90,7 @@ impl ServerConfig {
             audit_file: PathBuf::from("data/audit.json"),
             webhook_file: PathBuf::from("config/webhooks.yaml"),
             plugin_file: PathBuf::from("config/plugins.toml"),
+            mirror_file: PathBuf::from("config/mirrors.toml"),
         }
     }
 }
