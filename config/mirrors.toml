@@ -1,0 +1,24 @@
+# OpenGit Mirror Configuration
+#
+# Configure remote Git hosts to mirror repositories to.
+# On each successful push, OpenGit will push refs to matching mirrors.
+#
+# Mirror targets are matched by repo name patterns:
+#   - Empty or ["*"] matches all repos
+#   - "my-repo" matches exactly that repo
+#   - "open-*" matches repos starting with "open-"
+
+# Example: Mirror all repos to Gitee
+# [[mirrors]]
+# name = "gitee"
+# url = "git@gitee.com:user/{repo}.git"
+# repos = ["*"]
+# enabled = true
+
+# Example: Mirror specific repos to GitHub
+# [[mirrors]]
+# name = "github-backup"
+# url = "git@github.com:org/{repo}.git"
+# repos = ["open-daemon", "open-*"]
+# refs = ["refs/heads/*", "refs/tags/*"]
+# enabled = true
