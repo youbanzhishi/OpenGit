@@ -149,16 +149,8 @@ impl HookPlugin for BranchProtectionPlugin {
                     ));
                 }
 
-                // Check for force push (non-zero old sha that differs)
-                if update.old_sha != zero_sha
-                    && update.old_sha != update.new_sha
-                    && !self.allow_force_push
-                {
-                    return Some(format!(
-                        "branch-protection: force-pushing to protected branch '{}' is forbidden",
-                        update.ref_name
-                    ));
-                }
+                // Force push detection requires git rev-list (not simple SHA compare)
+                // Enforced at git hooks layer via git merge-base --is-ancestor
             }
         }
 
