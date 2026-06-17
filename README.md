@@ -256,6 +256,80 @@ signature = "sha256=" + hmac.new(secret, payload, hashlib.sha256).hexdigest()
 | P5 | ✅ | Docker Deployment + Repository Mirroring |
 | P6 | ✅ | Web Dashboard + Agent API |
 
+## Installation
+
+### 下载预编译二进制
+
+```bash
+# Linux x86_64
+curl -fsSL https://github.com/youbanzhishi/OpenGit/releases/latest/download/opengit-x86_64-unknown-linux-gnu.tar.gz | tar -xz
+
+# Linux ARM64
+curl -fsSL https://github.com/youbanzhishi/OpenGit/releases/latest/download/opengit-aarch64-unknown-linux-gnu.tar.gz | tar -xz
+
+# macOS (Apple Silicon)
+curl -fsSL https://github.com/youbanzhishi/OpenGit/releases/latest/download/opengit-aarch64-apple-darwin.tar.gz | tar -xz
+
+# macOS (Intel)
+curl -fsSL https://github.com/youbanzhishi/OpenGit/releases/latest/download/opengit-x86_64-apple-darwin.tar.gz | tar -xz
+
+# Windows
+# 从 https://github.com/youbanzhishi/OpenGit/releases 下载 zip 文件
+```
+
+### 一键部署到服务器
+
+```bash
+# 在服务器上执行
+curl -fsSL https://raw.githubusercontent.com/youbanzhishi/OpenGit/master/deploy.sh | bash
+
+# 指定版本
+VERSION=v0.5.0 curl -fsSL https://raw.githubusercontent.com/youbanzhishi/OpenGit/master/deploy.sh | bash
+
+# 自定义安装目录
+INSTALL_DIR=/data/opengit curl -fsSL https://raw.githubusercontent.com/youbanzhishi/OpenGit/master/deploy.sh | bash
+```
+
+部署脚本会自动：
+1. 检测系统架构
+2. 下载对应平台的二进制
+3. 创建 systemd 服务
+4. 启动服务
+
+### Docker 部署
+
+```bash
+# 拉取镜像
+docker pull ghcr.io/youbanzhishi/opengit:latest
+
+# 运行
+docker run -d \
+  --name opengit \
+  -p 9418:9418 \
+  -v /path/to/repos:/app/repos \
+  -v /path/to/config:/app/config \
+  ghcr.io/youbanzhishi/opengit:latest
+
+# Docker Compose
+curl -fsSL https://raw.githubusercontent.com/youbanzhishi/OpenGit/master/docker-compose.yml
+docker-compose up -d
+```
+
+### 从源码编译
+
+```bash
+# 克隆仓库
+git clone https://github.com/youbanzhishi/OpenGit.git
+cd OpenGit
+
+# 编译
+cargo build --release
+
+# 二进制位置
+ls -la target/release/opengit
+ls -la target/release/opengit-server
+```
+
 ## License
 
 MIT
