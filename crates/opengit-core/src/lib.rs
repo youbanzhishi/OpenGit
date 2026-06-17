@@ -23,8 +23,11 @@ pub mod import;
 pub mod mirror;
 pub mod plugin;
 pub mod policy;
+pub mod performance;
 pub mod rate_limiter;
 pub mod repository;
+pub mod security;
+pub mod tls;
 pub mod token_policy;
 pub mod webhook;
 
@@ -55,12 +58,24 @@ pub use mirror::{
     MirrorError, MirrorManager, MirrorPushContext, MirrorPushResult, MirrorSeverity, MirrorStatus,
     MirrorTarget, MirrorsFile, TargetStatus,
 };
+pub use performance::{
+    CacheStatsSnapshot, ConnectionPoolConfig, PerfConfig, PerfManager, PerfStats,
+};
 pub use plugin::{HookPlugin, PluginManager, PluginsFile};
 pub use policy::{Action, Permission, Policy, PolicyEngine};
 pub use rate_limiter::{
     RateLimitConfig, RateLimitHeaders, RateLimitKind, RateLimitResult, RateLimitStatus, RateLimiter,
 };
 pub use repository::Repository;
+pub use security::{
+    mask_token, sanitize_for_log, validate_identity_name, validate_ref_name, validate_repo_name,
+    validate_repo_path, validate_url, SecurityConfig, SecurityError, SecurityEvent,
+    SecurityManager, SecuritySeverity,
+};
+pub use tls::{
+    audit_encryption, generate_self_signed_cert, token_encryption, SecurityHeadersConfig,
+    TlsConfig, TlsVersion,
+};
 pub use token_policy::{
     Consequence, Condition, PolicyRule, TokenLifecycleManager, TokenPolicy, TokenPolicyEngine,
     TokenRotation,

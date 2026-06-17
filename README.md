@@ -1,6 +1,6 @@
-# 🐉 OpenGit — Lightweight Private Git Service
+# 🐉 OpenGit — AI-Ready Git Gateway
 
-> **Agent-first, Human-friendly** — Fine-grained permission model designed for AI agents and human collaboration.
+> **v1.0.0** — Agent-first, Human-friendly, Production-ready Git Gateway
 
 ## Why OpenGit?
 
@@ -10,21 +10,36 @@ OpenGit was born from that incident. Every rule in its default policy is a lesso
 
 ## Core Features
 
-- 🔒 **Per-Action Permission Model** — push-only, no-force-push, no-delete-branch, no-delete-repo, no-add-all, no-stash, no-reset-staging
-- 🤖 **Agent-First Design** — Default safe policies for AI agents; agents can only push by default
-- 👤 **Human-Friendly** — Humans get full control with audit logging on dangerous operations
-- 📦 **Zero Migration** — Reads existing Git bare repos directly, no import needed
-- 🔌 **Plugin System** — Hook plugins with trait-based extensibility (branch protection, push limits, custom rules)
-- 📊 **Full Audit Trail** — Every Git operation logged with identity, action, and result
-- ⚡ **Lightweight** — Single binary, zero database dependency, pure filesystem
-- 🔗 **Webhooks** — Post-receive notifications with HMAC-SHA256 signatures for CI/CD integration
-- 🖥️ **CLI Tool** — `og` command-line tool for managing your OpenGit server
-- 🔑 **SSH Gateway** — `opengit-sshd` manages system sshd with identity-mapped authorized_keys
-- 📡 **Streaming** — Smart HTTP with streaming pack transfer, prevents OOM on large repos
-- 💾 **Persistent State** — Identity, policy, and webhook configs survive server restarts
-- 📈 **Server Stats** — Atomic counters tracking pushes, clones, denials, webhooks, uptime
-- 🖥️ **Web Dashboard** — Built-in management UI for visual control
-- 🤖 **Agent API** — Remote management interface for AI agents with restricted permissions
+### Security
+- 🔒 **Per-Action Permission Model** — push-only, no-force-push, no-delete-branch, no-delete-repo
+- 🛡️ **AI Guard** — Semantic code analysis to detect dangerous operations before push
+- 📊 **AI Audit Log** — Automatic anomaly detection in operation patterns
+- 🔑 **Token Policy** — Dynamic token lifecycle management with automatic rotation
+- 📝 **Code Fingerprint** — Traceable code provenance with content hashing
+- 🚫 **Rate Limiting** — Token bucket + sliding window, IP/identity dual dimension
+- 🔐 **Security Hardening** — Input validation, path traversal prevention, injection detection
+- 🌐 **TLS/HTTPS** — Built-in HTTPS support with self-signed certificate generation
+- 📋 **Security Headers** — HSTS, CSP, X-Frame-Options, and more
+
+### Performance
+- 💾 **Object Cache** — In-memory Git object cache with LRU eviction
+- 🔄 **Connection Pool** — HTTP/HTTPS connection pooling
+- 🏷️ **Ref Cache** — Branch/tag resolution caching
+- ⚡ **Lazy Loading** — On-demand repository scanning
+
+### Developer Experience
+- 🤖 **Agent-First Design** — Default safe policies for AI agents
+- 👤 **Human-Friendly** — Humans get full control with audit logging
+- 📦 **Zero Migration** — Reads existing Git bare repos directly
+- 🔌 **Plugin System** — Hook plugins with trait-based extensibility
+- 📊 **Full Audit Trail** — Every Git operation logged
+- ⚡ **Lightweight** — Single binary, zero database dependency
+- 🔗 **Webhooks** — Post-receive notifications with HMAC-SHA256
+- 🖥️ **CLI Tool** — `og` command-line tool
+- 🔑 **SSH Gateway** — `opengit-sshd` manages SSH access
+- 📡 **Streaming** — Smart HTTP with streaming pack transfer
+- 🖥️ **Web Dashboard** — Built-in management UI
+- 🤖 **Agent API** — Remote management interface
 
 ## Permission Model
 
