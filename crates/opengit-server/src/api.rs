@@ -14,6 +14,7 @@ use opengit_core::{
     audit::AuditLog,
     identity::{Identity, IdentityStore},
     policy::{Action, EvalResult, Policy, PolicyEngine, PolicyRule},
+    rate_limiter::RateLimiter,
     repository::Repository,
 };
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,8 @@ pub struct AppState {
     pub stats: ServerStats,
     pub mirrors: RwLock<MirrorsFile>,
     pub import_status: RwLock<Vec<ImportResultInfo>>,
+    /// Rate limiter (P8.1)
+    pub rate_limiter: Option<RateLimiter>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -75,6 +78,24 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
     } else {
         MirrorsFile::default()
     };
+
+    // P8.1: Initialize rate limiter
+    let rate_limiter = if config.rate_limit_file.exists() {
+        match RateLimiter::from_file(&config.rate_limit_file) {
+            Ok(limiter) => {
+                tracing::info!("Rate limiter enabled: {}", config.rate_limit_file.display());
+                Some(limiter)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load rate limit config: {}, using defaults", e);
+                Some(RateLimiter::new(opengit_core::rate_limiter::RateLimitConfig::default()))
+            }
+        }
+    } else {
+        tracing::info!("Rate limiter disabled (no config file)");
+        None
+    };
+
     let state = Arc::new(AppState {
         config: config.clone(),
         policy_engine: RwLock::new(policy_engine),
@@ -84,6 +105,7 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         stats: ServerStats::new(),
         mirrors: RwLock::new(mirrors),
         import_status: RwLock::new(Vec::new()),
+        rate_limiter,
     });
 
     // Smart HTTP routes — with optional auth middleware
@@ -144,6 +166,17 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
     // Agent API routes
     let agent_api = crate::agent_api::build_agent_router();
 
+    // Rate limit middleware helper
+    let rate_limit_mw = |req: axum::extract::Request,
+                          next: axum::middleware::Next| async move {
+        crate::middleware::rate_limit(
+            State(req.extensions().get::<SharedState>().unwrap().clone()),
+            req,
+            next,
+        )
+        .await
+    };
+
     let app = Router::new()
         .route("/health", get(health))
         .nest("/api", api_routes)
@@ -151,6 +184,10 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         .merge(crate::web_ui::build_web_ui_router())
         .merge(smart_http)
         .merge(dashboard)
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            crate::middleware::rate_limit,
+        ))
         .with_state(state);
 
     Ok(app)

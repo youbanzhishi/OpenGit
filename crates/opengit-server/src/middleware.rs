@@ -1,15 +1,19 @@
 //! Authentication middleware — Token-based auth for Smart HTTP and REST API
 //!
 //! P2: Uses `base64` crate for proper decoding, works with RwLock<IdentityStore>
+//! P8.1: Added rate limiting middleware
 
 use axum::{
     extract::{Request, State},
-    http::StatusCode,
+    http::{HeaderMap, HeaderValue, StatusCode},
     middleware::Next,
     response::Response,
 };
 
+use opengit_core::rate_limiter::{RateLimitKind, RateLimitResult, RateLimiter};
+
 use crate::api::SharedState;
+use crate::AppState;
 
 /// The authenticated identity name (stored in request extensions)
 #[derive(Clone, Debug)]
@@ -101,4 +105,91 @@ pub async fn require_auth(
     }
 
     Err(StatusCode::UNAUTHORIZED)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// P8.1: Rate Limiting Middleware
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Rate limit middleware
+/// Applies rate limits based on IP and identity
+pub async fn rate_limit(
+    State(state): State<SharedState>,
+    mut request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    // Skip if rate limiter not initialized
+    let Some(rate_limiter) = &state.rate_limiter else {
+        return Ok(next.run(request).await);
+    };
+
+    // Determine rate limit kind based on path
+    let path = request.uri().path().to_string();
+    let kind = RateLimitKind::from_path(&path);
+
+    // Extract IP (from X-Forwarded-For or direct peer)
+    let ip = extract_ip(&request);
+
+    // Get identity (anonymous if not authenticated)
+    let identity = request
+        .extensions()
+        .get::<IdentityName>()
+        .map(|i| i.0.clone())
+        .unwrap_or_else(|| "anonymous".into());
+
+    // Check rate limit
+    let result = rate_limiter.check(&ip, &identity, kind).await;
+
+    match result {
+        RateLimitResult::Allowed { remaining, reset_in } => {
+            // Add rate limit headers
+            let mut response = next.run(request).await;
+            add_rate_limit_headers(response.headers(), remaining, reset_in);
+            Ok(response)
+        }
+        RateLimitResult::Denied { reason, retry_after } => {
+            tracing::warn!(
+                "Rate limit exceeded: ip={}, identity={}, kind={:?}, reason={}",
+                ip,
+                identity,
+                kind,
+                reason
+            );
+            Err(StatusCode::TOO_MANY_REQUESTS)
+        }
+    }
+}
+
+/// Extract client IP from request
+fn extract_ip(request: &Request) -> String {
+    // Check X-Forwarded-For header
+    if let Some(xff) = request.headers().get("X-Forwarded-For") {
+        if let Ok(xff_str) = xff.to_str() {
+            // Take the first IP (original client)
+            if let Some(ip) = xff_str.split(',').next() {
+                return ip.trim().to_string();
+            }
+        }
+    }
+
+    // Check X-Real-IP header
+    if let Some(xri) = request.headers().get("X-Real-IP") {
+        if let Ok(ip) = xri.to_str() {
+            return ip.trim().to_string();
+        }
+    }
+
+    // Fall back to peer address
+    request
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|c| c.0.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// Add rate limit headers to response
+fn add_rate_limit_headers(headers: &mut HeaderMap, remaining: u32, reset: u32) {
+    headers.insert("X-RateLimit-Remaining", HeaderValue::from(remaining));
+    headers.insert("X-RateLimit-Reset", HeaderValue::from(reset));
+    headers.insert("X-RateLimit-Limit", HeaderValue::from(100)); // TODO: dynamic
 }

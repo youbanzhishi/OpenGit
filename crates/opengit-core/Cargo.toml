@@ -19,3 +19,4 @@ git2 = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 regex = "1"
+ahash = "0.8"

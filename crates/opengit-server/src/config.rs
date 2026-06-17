@@ -34,6 +34,14 @@ pub struct ServerConfig {
     /// Mirror config file path
     #[serde(default = "default_mirror_file")]
     pub mirror_file: PathBuf,
+
+    /// Rate limit config file path
+    #[serde(default = "default_rate_limit_file")]
+    pub rate_limit_file: PathBuf,
+}
+
+fn default_rate_limit_file() -> PathBuf {
+    PathBuf::from("config/rate-limit.toml")
 }
 
 fn default_ssh_host_key() -> PathBuf {
@@ -91,6 +99,7 @@ impl ServerConfig {
             webhook_file: PathBuf::from("config/webhooks.yaml"),
             plugin_file: PathBuf::from("config/plugins.toml"),
             mirror_file: PathBuf::from("config/mirrors.toml"),
+            rate_limit_file: PathBuf::from("config/rate-limit.toml"),
         }
     }
 }

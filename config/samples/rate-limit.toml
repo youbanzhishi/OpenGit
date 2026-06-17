@@ -1,0 +1,46 @@
+# Rate Limit Configuration
+# P8.1: Enterprise-grade rate limiting for Git operations
+
+# Enable/disable rate limiting
+enabled = true
+
+# Response message when rate limit is exceeded
+message = "Rate limit exceeded. Please try again later or contact administrator."
+
+# Whitelist IPs/CIDRs (bypass rate limiting)
+# Use "*" to disable rate limiting entirely
+whitelist = [
+    "127.0.0.0/8",  # Localhost
+    "::1",           # IPv6 localhost
+    # "10.0.0.0/8",   # Internal network
+    # "192.168.0.0/16",
+]
+
+[ip]
+# Enable IP-based rate limiting
+enabled = true
+
+# Read operations (git fetch/clone)
+read_limit = 100       # requests per window
+write_limit = 10       # requests per window
+window_secs = 60       # window duration
+burst = 20             # burst allowance
+
+[identity]
+# Enable identity-based rate limiting (by token)
+enabled = true
+
+# Read operations (git fetch/clone)
+read_limit = 500       # requests per window
+write_limit = 50       # requests per window
+window_secs = 60       # window duration
+burst = 100            # burst allowance
+
+# Notes:
+# - Reads: git-upload-pack (clone/fetch)
+# - Writes: git-receive-pack (push)
+# - API: REST API calls
+# - Admin: Identity management, policy changes
+#
+# Rate limits are applied per IP AND per identity (both must pass)
+# Burst allows temporary spikes using token bucket algorithm

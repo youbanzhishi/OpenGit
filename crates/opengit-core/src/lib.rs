@@ -23,6 +23,7 @@ pub mod import;
 pub mod mirror;
 pub mod plugin;
 pub mod policy;
+pub mod rate_limiter;
 pub mod repository;
 pub mod token_policy;
 pub mod webhook;
@@ -56,6 +57,9 @@ pub use mirror::{
 };
 pub use plugin::{HookPlugin, PluginManager, PluginsFile};
 pub use policy::{Action, Permission, Policy, PolicyEngine};
+pub use rate_limiter::{
+    RateLimitConfig, RateLimitHeaders, RateLimitKind, RateLimitResult, RateLimitStatus, RateLimiter,
+};
 pub use repository::Repository;
 pub use token_policy::{
     Consequence, Condition, PolicyRule, TokenLifecycleManager, TokenPolicy, TokenPolicyEngine,
