@@ -1,72 +1,64 @@
-# OpenGit Dockerfile - Multi-stage build
-# P5: Docker deployment support
+# ─── OpenGit Dockerfile ────────────────────────────────────────
+# Multi-stage build for minimal image size
 
-# -- Build stage -------------------------------------------------------
-FROM rust:1.82-slim AS builder
+# Stage 1: Build
+FROM rust:1.80-slim AS builder
 
+WORKDIR /build
+
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
+    gcc \
     pkg-config \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /build
-
-# Copy workspace manifests first (for dependency caching)
+# Copy manifests first for better caching
 COPY Cargo.toml Cargo.lock ./
-COPY crates/opengit-core/Cargo.toml crates/opengit-core/Cargo.toml
-COPY crates/opengit-server/Cargo.toml crates/opengit-server/Cargo.toml
-COPY crates/opengit-hooks/Cargo.toml crates/opengit-hooks/Cargo.toml
-COPY crates/opengit-storage/Cargo.toml crates/opengit-storage/Cargo.toml
-COPY crates/opengit-cli/Cargo.toml crates/opengit-cli/Cargo.toml
-COPY crates/opengit-ssh/Cargo.toml crates/opengit-ssh/Cargo.toml
-
-# Create dummy source files to cache dependencies
-RUN mkdir -p crates/opengit-core/src && touch crates/opengit-core/src/lib.rs \
-    && mkdir -p crates/opengit-server/src && touch crates/opengit-server/src/main.rs \
-    && mkdir -p crates/opengit-hooks/src && touch crates/opengit-hooks/src/main.rs \
-    && mkdir -p crates/opengit-storage/src && touch crates/opengit-storage/src/lib.rs \
-    && mkdir -p crates/opengit-cli/src && touch crates/opengit-cli/src/main.rs \
-    && mkdir -p crates/opengit-ssh/src && touch crates/opengit-ssh/src/main.rs
-
-# Build dependencies only (cached layer)
-RUN cargo build --release 2>/dev/null || true
-
-# Copy actual source code
-COPY crates/ crates/
+COPY crates ./crates
 
 # Build all binaries
-RUN cargo build --release
+RUN cargo build --release -p opengit-cli -p opengit-server
 
-# -- Runtime stage -----------------------------------------------------
+# ─── Stage 2: Runtime ──────────────────────────────────────────
 FROM debian:bookworm-slim
 
+LABEL org.opencontainers.image.title="OpenGit"
+LABEL org.opencontainers.image.description="Git Gateway - Mirror repositories to multiple Git hosts"
+LABEL org.opencontainers.image.source="https://github.com/youbanzhishi/OpenGit"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    curl \
     git \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN groupadd -r opengit && useradd -r -g opengit -d /home/opengit -s /bin/bash opengit
+RUN groupadd --gid 1000 opengit \
+    && useradd --uid 1000 --gid opengit --shell /bin/bash --create-home opengit
 
-WORKDIR /home/opengit
+WORKDIR /app
 
 # Copy binaries from builder
-COPY --from=builder /build/target/release/opengit /usr/local/bin/
-COPY --from=builder /build/target/release/og /usr/local/bin/
-COPY --from=builder /build/target/release/opengit-sshd /usr/local/bin/
+COPY --from=builder /build/target/release/opengit /app/og
+COPY --from=builder /build/target/release/opengit-server /app/opengit-server
 
-# Copy default config
-COPY config/ ./config/
-
-# Create data directories
-RUN mkdir -p repos data && chown -R opengit:opengit /home/opengit
+# Create config directories
+RUN mkdir -p /app/config /app/repos /app/logs \
+    && chown -R opengit:opengit /app
 
 USER opengit
 
+# Default command
+CMD ["/app/og", "--help"]
+
+# ─── Exposed Ports ──────────────────────────────────────────────
+# Default OpenGit server port
 EXPOSE 9418
 
-VOLUME ["/home/opengit/repos", "/home/opengit/data", "/home/opengit/config"]
-
-ENTRYPOINT ["opengit"]
-CMD ["--config", "config/server.toml"]
+# ─── Health Check ────────────────────────────────────────────────
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:9418/health || exit 1

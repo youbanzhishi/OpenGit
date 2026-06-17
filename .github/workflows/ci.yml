@@ -2,54 +2,88 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main, master, develop]
   pull_request:
-    branches: [master]
-  workflow_dispatch:
+    branches: [main, master]
 
-permissions:
-  contents: write
+# 同一个 PR 取消旧 job，节省额度
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
+  # ─── 代码检查 ─────────────────────────────────────────────────
   fmt:
-    name: Auto Format
+    name: Rustfmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - name: Format
-        run: cargo fmt --all
-      - name: Commit and push if changed
-        run: |
-          git config user.name "dragon-ci[bot]"
-          git config user.email "dragon-ci[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet || git commit -m "style: auto-format with rustfmt"
-          git push
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-  check:
-    name: Check & Test
-    needs: fmt
+  clippy:
+    name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
+  # ─── 测试 ─────────────────────────────────────────────────────
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/* -> target
       - name: Run tests
-        run: cargo test --workspace
+        run: cargo test --all --all-features -- --nocapture
+      - name: Run doc tests
+        run: cargo test --doc --all
 
-      - name: Build
-        run: cargo build --release
+  # ─── 安全审计 ─────────────────────────────────────────────────
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run cargo-audit
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── 多平台构建检查 ───────────────────────────────────────────
+  build-check:
+    name: Build Check (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          - x86_64-pc-windows-gnu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build CLI
+        run: cargo build --release -p opengit-cli --target ${{ matrix.target }}
+      - name: Build Server
+        run: cargo build --release -p opengit-server --target ${{ matrix.target }}

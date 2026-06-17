@@ -1,11 +1,32 @@
-target/
-.git/
+# ─── OpenGit .dockerignore ─────────────────────────────────────
+
+# Git
+.git
 .gitignore
-*.md
-!config/
-repos/
-data/
-trash/
+
+# Build outputs
+target/
+**/target/
+
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Log files
+*.log
+logs/
+
+# Test files
+**/*.rs.bk
+Cargo.lock
+
+# Docs
+README.md
+docs/
+LICENSE
