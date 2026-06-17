@@ -141,9 +141,13 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
     });
     let dashboard = opengit_dashboard::build_router(dashboard_state);
 
+    // Agent API routes
+    let agent_api = crate::agent_api::build_agent_router();
+
     let app = Router::new()
         .route("/health", get(health))
         .nest("/api", api_routes)
+        .nest("/api/agent", agent_api)
         .merge(smart_http)
         .merge(dashboard)
         .with_state(state);
@@ -234,6 +238,26 @@ async fn delete_repo(
     State(state): State<SharedState>,
     Extension(identity): Extension<IdentityName>,
 ) -> Result<StatusCode, StatusCode> {
+    // 🚫 AGENT PERMISSION CHECK: Agents cannot delete repos
+    {
+        let identity_store = state.identity_store.read().await;
+        if let Some(identity_info) = identity_store.find(&identity.0) {
+            if identity_info.is_agent() && !identity_info.agent_can_do("delete_repo") {
+                state.audit_log.log(opengit_core::audit::AuditEntry {
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    repo: name.clone(),
+                    identity: identity.0.clone(),
+                    action: "DeleteRepo".into(),
+                    ref_name: None,
+                    allowed: false,
+                    reason: Some("Agent identity cannot delete repositories".into()),
+                });
+                tracing::warn!("Agent {} attempted to delete repo {} - BLOCKED", identity.0, name);
+                return Err(StatusCode::FORBIDDEN);
+            }
+        }
+    }
+
     // Check DeleteRepo permission
     {
         let engine = state.policy_engine.read().await;
@@ -744,6 +768,17 @@ async fn delete_webhook(
     State(state): State<SharedState>,
     Extension(caller): Extension<IdentityName>,
 ) -> Result<StatusCode, StatusCode> {
+    // 🚫 AGENT PERMISSION CHECK: Agents cannot delete webhooks
+    {
+        let identity_store = state.identity_store.read().await;
+        if let Some(identity_info) = identity_store.find(&caller.0) {
+            if identity_info.is_agent() {
+                tracing::warn!("Agent {} attempted to delete webhook {} - BLOCKED", caller.0, idx);
+                return Err(StatusCode::FORBIDDEN);
+            }
+        }
+    }
+
     // Only admins can delete webhooks
     {
         let engine = state.policy_engine.read().await;
@@ -1052,6 +1087,17 @@ async fn delete_mirror(
     State(state): State<SharedState>,
     Extension(caller): Extension<IdentityName>,
 ) -> Result<StatusCode, StatusCode> {
+    // 🚫 AGENT PERMISSION CHECK: Agents cannot delete mirrors
+    {
+        let identity_store = state.identity_store.read().await;
+        if let Some(identity_info) = identity_store.find(&caller.0) {
+            if identity_info.is_agent() {
+                tracing::warn!("Agent {} attempted to delete mirror {} - BLOCKED", caller.0, idx);
+                return Err(StatusCode::FORBIDDEN);
+            }
+        }
+    }
+
     // Only admins can delete mirrors
     {
         let engine = state.policy_engine.read().await;

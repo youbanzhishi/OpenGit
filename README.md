@@ -23,6 +23,8 @@ OpenGit was born from that incident. Every rule in its default policy is a lesso
 - 📡 **Streaming** — Smart HTTP with streaming pack transfer, prevents OOM on large repos
 - 💾 **Persistent State** — Identity, policy, and webhook configs survive server restarts
 - 📈 **Server Stats** — Atomic counters tracking pushes, clones, denials, webhooks, uptime
+- 🖥️ **Web Dashboard** — Built-in management UI for visual control
+- 🤖 **Agent API** — Remote management interface for AI agents with restricted permissions
 
 ## Permission Model
 
@@ -100,121 +102,82 @@ og webhooks add https://ci.example.com/hook --secret my-secret
 og stats
 ```
 
-## SSH Gateway (`opengit-sshd`)
+## Web Dashboard
 
-OpenGit provides an SSH gateway that integrates with the system's `sshd` for secure Git operations over SSH, with identity-based access control.
+OpenGit 提供内置的 Web 管理面板：
 
 ```bash
-# Setup SSH configuration (generates sshd_config + authorized_keys)
-opengit-sshd setup --repos-dir /path/to/repos --identity-dir /path/to/identities
+# 启动服务器（Dashboard 默认启用）
+./target/release/opengit
 
-# Print authorized_keys content for manual review
-opengit-sshd authorized-keys --identity-dir /path/to/identities
-
-# Print sshd_config content
-opengit-sshd config --repos-dir /path/to/repos
+# 访问 Dashboard
+open http://localhost:9418/
 ```
 
-### How It Works
+### Dashboard 功能
 
-1. Each OpenGit identity maps to a system SSH key in `authorized_keys`
-2. SSH keys use forced commands that set `OPENGIT_IDENTITY` environment variable
-3. The Smart HTTP pipeline reads this identity for permission evaluation
-4. No custom SSH server needed — leverages battle-tested system `sshd`
+| 模块 | 功能 |
+|------|------|
+| 📦 仓库管理 | 创建、删除、搜索仓库，查看仓库详情 |
+| 🛡️ 访问策略 | 可视化配置权限规则，添加/删除策略 |
+| 🔗 Webhooks | 管理 webhook 通知，配置触发事件 |
+| 🪞 镜像同步 | 配置仓库镜像，监控同步状态 |
+| ⚡ 自动化规则 | 配置触发条件和执行动作 |
+| 📋 审计日志 | 查看所有操作的审计记录 |
+| ⚙️ 配置文件 | 可视化编辑 server.toml、policies.yaml 等 |
+| 📥 导入迁移 | 从 Git URL 或 Gitea 服务器批量导入仓库 |
 
-## Hook Plugin System
+## Agent API
 
-OpenGit includes a plugin system for extending hook behavior beyond the built-in policy engine.
+支持 AI 智能体远程管理配置：
 
-### Built-in Plugins
+```bash
+# 1. 注册 Agent 身份
+curl -X POST http://localhost:9418/api/agent/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "deploy-agent", "display_name": "部署代理"}'
 
-| Plugin | Description |
-|--------|-------------|
-| **BranchProtection** | Enforces branch protection rules (e.g., no push to `main`/`master` by agents) |
-| **PushLimit** | Limits push frequency and file size per identity |
+# 2. 获取 Agent Token
+curl -X POST http://localhost:9418/api/agent/token \
+  -H "Content-Type: application/json" \
+  -d '{"name": "deploy-agent"}'
 
-### Plugin Configuration (`config/plugins.toml`)
+# 3. Agent 可用操作
+curl http://localhost:9418/api/repos \
+  -H "Authorization: Bearer og_agent-deploy-xxx"
 
-```toml
-[[plugin]]
-name = "branch_protection"
-enabled = true
+# 4. Agent 创建仓库（允许）
+curl -X POST http://localhost:9418/api/repos \
+  -H "Authorization: Bearer og_agent-deploy-xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "new-project"}'
 
-[plugin.config]
-protected_branches = ["main", "master"]
-allow_force_push = false
-
-[[plugin]]
-name = "push_limit"
-enabled = true
-
-[plugin.config]
-max_pushes_per_hour = 100
-max_file_size_mb = 50
+# 5. Agent 删除仓库（禁止 ❌）
+curl -X DELETE http://localhost:9418/api/repos/new-project \
+  -H "Authorization: Bearer og_agent-deploy-xxx"
+# 返回 403 Forbidden
 ```
 
-### Custom Plugins
+### Agent 权限矩阵
 
-Implement the `HookPlugin` trait to create custom plugins:
+| 操作 | Agent | Human |
+|------|-------|-------|
+| 读取配置 | ✅ | ✅ |
+| 创建仓库 | ✅ | ✅ |
+| 修改策略 | ✅ | ✅ |
+| **删除仓库** | ❌ | ✅ |
+| 删除策略 | ❌ | ✅ |
+| 配置 Webhooks | ✅ | ✅ |
+| 删除 Webhook | ❌ | ✅ |
+| 配置镜像 | ✅ | ✅ |
+| 导入仓库 | ✅ | ✅ |
 
-```rust
-use opengit_core::plugin::{HookPlugin, HookContext, HookResult};
-
-struct MyPlugin;
-
-impl HookPlugin for MyPlugin {
-    fn name(&self) -> &str { "my_plugin" }
-    
-    fn on_pre_receive(&self, ctx: &HookContext) -> HookResult {
-        // Your logic here
-        Ok(())
-    }
-    
-    fn on_post_receive(&self, ctx: &HookContext) -> HookResult {
-        Ok(())
-    }
-}
-```
-
-## API
-
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/health` | GET | No | Health check |
-| `/api/repos` | GET | Yes | List repositories |
-| `/api/repos` | POST | Yes | Create repository |
-| `/api/repos/{name}` | GET | Yes | Get repository info |
-| `/api/repos/{name}` | DELETE | Yes | Delete repository (moves to trash) |
-| `/api/repos/{name}/refs` | GET | Yes | List refs |
-| `/api/repos/{name}/reflog/{ref}` | GET | Yes | Get reflog |
-| `/api/repos/{name}/size` | GET | Yes | Get repository disk size |
-| `/api/repos/bulk/create` | POST | Yes | Create multiple repositories |
-| `/api/policy/eval` | POST | Yes | Evaluate a policy |
-| `/api/policy/rules` | GET | Yes | List policy rules |
-| `/api/policy/rules` | POST | Yes | Add a policy rule |
-| `/api/identities` | GET | Yes | List identities |
-| `/api/identities` | POST | Yes | Register identity |
-| `/api/identities/{name}` | GET | Yes | Get identity info |
-| `/api/identities/{name}` | DELETE | Yes | Delete identity |
-| `/api/identities/{name}/tokens` | POST | Yes | Generate token |
-| `/api/audit` | GET | Yes | Get audit log |
-| `/api/audit/denied` | GET | Yes | Get denied operations |
-| `/api/webhooks` | GET | Yes | List webhooks |
-| `/api/webhooks` | POST | Yes | Add webhook |
-| `/api/webhooks/{idx}` | DELETE | Yes | Delete webhook |
-| `/api/stats` | GET | Yes | Server statistics |
-| `/{repo}/info/refs` | GET | Optional | Git Smart HTTP discovery |
-| `/{repo}/git-upload-pack` | POST | Optional | Git fetch/clone |
-| `/{repo}/git-receive-pack` | POST | Optional | Git push |
+## REST API
 
 ### Authentication
 
-All `/api/*` endpoints require a Bearer token:
-```
-Authorization: Bearer og_human-admin_default_xxxxxxxx
-```
+All authenticated endpoints require a token. Pass it via:
 
-Smart HTTP endpoints support optional auth via:
 - `Authorization: Bearer <token>`
 - `Authorization: Basic <base64(user:token)>`
 - Query parameter: `?token=<token>`
@@ -291,41 +254,7 @@ signature = "sha256=" + hmac.new(secret, payload, hashlib.sha256).hexdigest()
 | P3 | ✅ | CLI Tool + Repo Size + Bulk Operations + Precise Webhook Refs |
 | P4 | ✅ | SSH Gateway + Hook Plugin System (BranchProtection + PushLimit) |
 | P5 | ✅ | Docker Deployment + Repository Mirroring |
-| P6 | ✅ | Web Dashboard — 可视化管理所有仓库、策略、Webhooks、镜像 |
-
-## Web Dashboard
-
-OpenGit 提供内置的 Web 管理面板，无需额外安装：
-
-```bash
-# 启动服务器（Dashboard 默认启用）
-./target/release/opengit
-
-# 访问 Dashboard
-open http://localhost:9418/
-```
-
-### Dashboard 功能
-
-| 模块 | 功能 |
-|------|------|
-| 📦 仓库管理 | 创建、删除、搜索仓库，查看仓库详情 |
-| 🛡️ 访问策略 | 可视化配置权限规则，添加/删除策略 |
-| 🔗 Webhooks | 管理 webhook 通知，配置触发事件 |
-| 🪞 镜像同步 | 配置仓库镜像，监控同步状态 |
-| ⚡ 自动化规则 | 配置触发条件和执行动作 |
-| 📋 审计日志 | 查看所有操作的审计记录 |
-| ⚙️ 配置文件 | 可视化编辑 server.toml、policies.yaml 等 |
-| 📥 导入迁移 | 从 Git URL 或 Gitea 服务器批量导入仓库 |
-
-### 界面预览
-
-Dashboard 采用深色主题，支持以下特性：
-
-- **响应式布局** — 适配桌面和移动设备
-- **实时状态** — 服务器连接状态实时显示
-- **操作确认** — 危险操作需要二次确认
-- **Token 认证** — 支持 Bearer Token 认证
+| P6 | ✅ | Web Dashboard + Agent API |
 
 ## License
 

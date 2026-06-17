@@ -2,12 +2,13 @@
 //!
 //! P4: SSH transport + Hook Plugin System.
 //! P5: Docker deployment + Repository mirroring.
-//! P6: Web Dashboard for management UI.
+//! P6: Web Dashboard + Agent API.
 
 use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
 
+mod agent_api;
 mod api;
 mod config;
 mod middleware;

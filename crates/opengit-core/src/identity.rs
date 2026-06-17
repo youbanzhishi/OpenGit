@@ -90,6 +90,47 @@ impl Identity {
     pub fn is_human(&self) -> bool {
         self.kind == IdentityKind::Human
     }
+
+    /// Check if this identity can perform a specific action (Agent-specific)
+    /// Returns true if the action is allowed for agents
+    pub fn agent_can_do(&self, action: &str) -> bool {
+        if self.is_human() {
+            return true; // Humans can do everything
+        }
+
+        // Agent permissions - restrictive by default
+        match action {
+            // Allowed for agents
+            "read" | "Read" => true,
+            "create_repo" | "CreateRepo" => true,
+            "push" | "Push" => true,
+            "tag" | "Tag" => true,
+            "add_webhook" | "AddWebhook" => true,
+            "add_mirror" | "AddMirror" => true,
+            "add_policy" | "AddPolicy" => true,
+            "import" | "Import" => true,
+            "write_config" | "WriteConfig" => true,
+
+            // Explicitly forbidden for agents
+            "delete_repo" | "DeleteRepo" => false,
+            "delete_policy" | "DeletePolicy" => false,
+            "delete_webhook" | "DeleteWebhook" => false,
+            "delete_mirror" | "DeleteMirror" => false,
+            "admin" | "Admin" => false,
+            "confirm" | "Confirm" => false,
+            "force_push" | "ForcePush" => false,
+            "delete_branch" | "DeleteBranch" => false,
+
+            // Unknown actions - default to allowed for read, denied for write
+            _ => {
+                if action.starts_with("read") || action.starts_with("get") || action.starts_with("list") {
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
 }
 
 /// An authentication token
