@@ -1,0 +1,44 @@
+# Branch Protection Configuration
+# P7.2: Smart branch protection based on CI status
+
+[branch_protection]
+# Enable/disable branch protection
+enabled = true
+
+# Required CI checks that must pass before push is allowed
+required_checks = [
+    "ci/build",
+    "ci/test",
+    "ci/lint"
+]
+
+# Lock reason shown when CI fails
+lock_reason = "CI checks required - please ensure all tests pass"
+
+# Timeout for CI status check (seconds)
+ci_timeout_seconds = 3600
+
+# CI Provider: GitHub Actions
+[ci_providers.github]
+enabled = true
+# GitHub token for API access (use environment variable: ${GITHUB_TOKEN})
+token = "${GITHUB_TOKEN}"
+# Required GitHub Actions status contexts
+required_statuses = ["github-actions"]
+
+# CI Provider: GitLab CI
+[ci_providers.gitlab]
+enabled = false
+# GitLab token for API access (use environment variable: ${GITLAB_TOKEN})
+token = "${GITLAB_TOKEN}"
+# Required GitLab CI statuses
+required_statuses = ["gitlab-ci"]
+
+# Example: Protected branches pattern
+# [[protected_branches]]
+# pattern = "main"
+# required_checks = ["ci/test", "ci/lint"]
+# 
+# [[protected_branches]]
+# pattern = "release/*"
+# required_checks = ["ci/build", "ci/test", "ci/integration"]

@@ -1,0 +1,80 @@
+# Token Policy Configuration
+# P7.4: Dynamic token permission adjustment based on behavior
+
+[token_policy]
+# Enable/disable token policy
+enabled = true
+
+# Policy rules
+# Each rule has conditions that trigger it and consequences when triggered
+
+[[token_policy.policies]]
+name = "high-risk-action"
+# Trigger when too many dangerous actions in a short time
+conditions = [
+    { type = "action_count", action = "delete_branch", count = 3, window = "1h" },
+    { type = "action_count", action = "force_push", count = 2, window = "1h" }
+]
+consequences = [
+    { type = "downgrade_permissions" },
+    { type = "notify_admin" },
+    { type = "log_incident" }
+]
+
+[[token_policy.policies]]
+name = "idle-token-revoke"
+# Revoke tokens that haven't been used for too long
+conditions = [
+    { type = "idle", days = 90 }
+]
+consequences = [
+    { type = "revoke_token" },
+    { type = "notify_admin" }
+]
+
+[[token_policy.policies]]
+name = "failed-auth-lockout"
+# Lock out after too many failed authentications
+conditions = [
+    { type = "failed_auth_count", count = 5, window = "5m" }
+]
+consequences = [
+    { type = "require_reauth" },
+    { type = "notify_admin" }
+]
+
+[[token_policy.policies]]
+name = "suspicious-activity"
+# Trigger on any suspicious activity detected by AI
+conditions = [
+    { type = "suspicious_activity" }
+]
+consequences = [
+    { type = "revoke_token" },
+    { type = "notify_admin" },
+    { type = "log_incident" }
+]
+
+[[token_policy.policies]]
+name = "off-hours-access"
+# Alert when accessing outside work hours
+conditions = [
+    { type = "outside_work_hours", start_hour = 9, end_hour = 18 }
+]
+consequences = [
+    { type = "log_incident" },
+    { type = "notify_admin" }
+]
+
+# Time windows format:
+# - "Xs" for X seconds (e.g., "300s" = 5 minutes)
+# - "Xm" for X minutes (e.g., "30m" = 30 minutes)
+# - "Xh" for X hours (e.g., "1h" = 1 hour)
+# - "Xd" for X days (e.g., "30d" = 30 days)
+
+# Consequence types:
+# - downgrade_permissions: Reduce token's permissions
+# - notify_admin: Send notification to administrators
+# - revoke_token: Immediately revoke the token
+# - require_reauth: Force user to re-authenticate
+# - log_incident: Log as security incident

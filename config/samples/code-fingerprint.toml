@@ -1,0 +1,19 @@
+# Code Fingerprint Configuration
+# P7.5: Traceable code provenance
+
+[code_fingerprint]
+# Enable/disable code fingerprinting
+enabled = true
+
+# Minimum lines changed to generate fingerprint
+# Smaller changes won't generate fingerprints to reduce noise
+min_lines = 3
+
+# Store fingerprints in git notes (requires git-notes support)
+git_notes_enabled = false
+
+# Example: Custom rules for sensitive repositories
+# [[code_fingerprint.sensitive_repos]]
+# repo = "production/*"
+# min_lines = 1  # Generate fingerprint for any change
+# require_approval = true

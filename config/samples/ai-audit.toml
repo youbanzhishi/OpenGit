@@ -1,0 +1,50 @@
+# AI Audit Configuration
+# P7.3: AI-powered anomaly detection for user behavior
+
+[ai_audit]
+# Enable/disable AI audit
+enabled = true
+
+# Anomaly detection thresholds
+[ai_audit.thresholds]
+# Operations per hour that triggers burst alert
+burst_threshold = 50
+
+# Standard deviations for pattern drift detection
+pattern_drift_stddev = 2.5
+
+# Work hours configuration
+work_start_hour = 9   # 9 AM
+work_end_hour = 18    # 6 PM
+
+# Minimum severity to trigger alerts
+min_alert_severity = "low"
+
+# Maximum age of baseline before requiring refresh (days)
+baseline_max_age_days = 30
+
+# Alert channels configuration
+# Uncomment channels you want to enable:
+
+# [[ai_audit.alert_channels]]
+# type = "log"
+# # Simply log alerts - always enabled by default
+
+# [[ai_audit.alert_channels]]
+# type = "webhook"
+# url = "https://your-webhook-endpoint.com/alerts"
+
+# [[ai_audit.alert_channels]]
+# type = "email"
+# recipients = ["admin@example.com", "security@example.com"]
+
+# [[ai_audit.alert_channels]]
+# type = "slack"
+# webhook_url = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+
+# [[ai_audit.alert_channels]]
+# type = "feishu"
+# webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/XXX-YYY-ZZZ"
+
+# Severity levels: low, medium, high, critical
+# Alerts below min_alert_severity will be logged but not sent to channels
