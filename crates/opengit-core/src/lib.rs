@@ -25,7 +25,10 @@ pub use import::{
     GiteaRelease, GiteaRepo, ImportEngine, ImportRequest, ImportResult, ImportSource,
     MigrationResult,
 };
-pub use mirror::{MirrorManager, MirrorTarget, MirrorsFile};
+pub use mirror::{
+    MirrorError, MirrorManager, MirrorPushContext, MirrorPushResult, MirrorSeverity,
+    MirrorStatus, MirrorTarget, MirrorsFile, TargetStatus,
+};
 pub use plugin::{HookPlugin, PluginManager, PluginsFile};
 pub use policy::{Action, Permission, Policy, PolicyEngine};
 pub use repository::Repository;
