@@ -148,6 +148,7 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         .route("/health", get(health))
         .nest("/api", api_routes)
         .nest("/api/agent", agent_api)
+        .merge(crate::web_ui::build_web_ui_router())
         .merge(smart_http)
         .merge(dashboard)
         .with_state(state);

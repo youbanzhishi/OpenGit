@@ -15,6 +15,7 @@ mod middleware;
 mod smart_http;
 mod stats;
 mod webhook;
+mod web_ui;
 
 use config::ServerConfig;
 
