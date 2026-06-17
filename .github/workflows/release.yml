@@ -87,6 +87,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Set macOS deployment target
+        if: matrix.target contains 'apple-darwin'
+        run: |
+          echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
+
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
         with:
