@@ -1,0 +1,34 @@
+# OpenGit Server Configuration
+# 复制此文件到 config/server.toml 并根据需要修改
+
+# 仓库存储目录
+repos_dir = "./repos"
+
+# HTTP 绑定地址
+# Git 协议默认端口: 9418
+bind = "0.0.0.0:9418"
+
+# SSH 绑定地址（留空则禁用 SSH）
+# ssh_bind = "0.0.0.0:2222"
+ssh_bind = ""
+
+# SSH 主机密钥路径
+ssh_host_key = "config/ssh_host_key"
+
+# 策略文件
+policy_file = "config/policies.yaml"
+
+# 身份文件
+identity_file = "config/identities.yaml"
+
+# 审计日志文件
+audit_file = "data/audit.json"
+
+# Webhook 配置文件
+webhook_file = "config/webhooks.yaml"
+
+# 插件配置文件
+plugin_file = "config/plugins.toml"
+
+# 镜像配置文件
+mirror_file = "config/mirrors.toml"

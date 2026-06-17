@@ -2,6 +2,7 @@
 //!
 //! P4: SSH transport + Hook Plugin System.
 //! P5: Docker deployment + Repository mirroring.
+//! P6: Web Dashboard for management UI.
 
 use anyhow::Result;
 use clap::Parser;
@@ -42,6 +43,10 @@ struct Cli {
     /// Enable SSH server
     #[arg(long)]
     ssh: bool,
+
+    /// Enable Web Dashboard (default: enabled)
+    #[arg(long, default_value = "true")]
+    dashboard: bool,
 }
 
 #[tokio::main]
@@ -85,6 +90,10 @@ async fn main() -> Result<()> {
         );
     } else {
         tracing::info!("   SSH:      disabled");
+    }
+
+    if cli.dashboard {
+        tracing::info!("   Dashboard: http://{}/", config.bind.replace("0.0.0.0", "localhost"));
     }
 
     let app = api::build_router(&config)?;

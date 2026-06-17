@@ -1,0 +1,38 @@
+# OpenGit 访问策略配置
+# 定义谁可以做什么操作
+
+rules:
+  # 默认允许读取
+  - repo: "*"
+    identity: "*"
+    action: "Read"
+    permission: "Allow"
+    reason: "Allow public read access"
+
+  # 管理员拥有所有权限
+  - repo: "*"
+    identity: "admin"
+    action: "Admin"
+    permission: "Allow"
+    reason: "Admin has full access"
+
+  # 注册用户可以推送
+  - repo: "*"
+    identity: "*"
+    action: "Push"
+    permission: "Allow"
+    reason: "Authenticated users can push"
+
+  # 匿名用户禁止创建仓库
+  - repo: "*"
+    identity: "anonymous"
+    action: "CreateRepo"
+    permission: "Deny"
+    reason: "Anonymous cannot create repos"
+
+  # 特定仓库限制
+  # - repo: "sensitive-repo"
+  #   identity: "developer"
+  #   action: "Push"
+  #   permission: "Deny"
+  #   reason: "This repo is protected"

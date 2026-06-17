@@ -1,0 +1,16 @@
+# OpenGit 镜像同步配置
+# 自动将仓库同步到其他 Git 服务
+
+[[mirrors]]
+name = "github-backup"
+url = "https://github.com/your-org/your-repo.git"
+repos = ["*"]  # 同步所有仓库，或指定 ["repo1", "repo2"]
+refs = ["refs/heads/*", "refs/tags/*"]  # 同步分支和标签
+enabled = true
+
+# # Gitea 镜像示例
+# [[mirrors]]
+# name = "gitea-mirror"
+# url = "https://gitea.com/user/repo.git"
+# repos = ["specific-repo"]
+# enabled = true

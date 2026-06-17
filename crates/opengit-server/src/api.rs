@@ -135,10 +135,17 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         .route("/import/status", get(import_status))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
+    // Dashboard routes — Web UI
+    let dashboard_state = Arc::new(opengit_dashboard::DashboardState {
+        server_version: env!("CARGO_PKG_VERSION").to_string(),
+    });
+    let dashboard = opengit_dashboard::build_router(dashboard_state);
+
     let app = Router::new()
         .route("/health", get(health))
         .nest("/api", api_routes)
         .merge(smart_http)
+        .merge(dashboard)
         .with_state(state);
 
     Ok(app)

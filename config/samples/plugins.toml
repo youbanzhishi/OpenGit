@@ -1,0 +1,38 @@
+# OpenGit 插件配置
+# 启用和管理插件扩展
+
+[plugins]
+
+# 代码质量检查插件
+[[plugins.hooks]]
+name = "code-quality"
+enabled = true
+config = """
+max_line_length = 120
+forbidden_files = ["*.exe", "*.dll"]
+"""
+
+# 自动标签插件
+[[plugins.hooks]]
+name = "auto-label"
+enabled = true
+config = """
+rules:
+  - pattern: "feat/*"
+    labels: ["feature"]
+  - pattern: "fix/*"
+    labels: ["bugfix"]
+  - pattern: "docs/*"
+    labels: ["documentation"]
+"""
+
+# 部署触发插件
+[[plugins.hooks]]
+name = "deploy-trigger"
+enabled = false
+config = """
+branches:
+  - "main"
+  - "release/*"
+webhook: "https://deploy.example.com/trigger"
+"""

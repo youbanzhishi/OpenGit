@@ -6,6 +6,7 @@ members = [
     "crates/opengit-storage",
     "crates/opengit-cli",
     "crates/opengit-ssh",
+    "crates/opengit-dashboard",
 ]
 resolver = "2"
 

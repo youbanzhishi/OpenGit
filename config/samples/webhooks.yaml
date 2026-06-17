@@ -1,0 +1,24 @@
+# OpenGit Webhook 配置
+# 在仓库事件发生时发送 HTTP 请求
+
+webhooks:
+  # CI/CD 触发示例
+  - url: "https://ci.example.com/webhook"
+    secret: "your-secret-token"
+    events:
+      - "push"
+      - "tag"
+    active: true
+
+  # 通知示例
+  - url: "https://notify.example.com/webhook"
+    events:
+      - "push"
+    active: true
+
+  # Slack 通知示例
+  # - url: "https://hooks.slack.com/services/xxx/yyy/zzz"
+  #   events:
+  #     - "push"
+  #     - "tag"
+  #   active: true

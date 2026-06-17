@@ -291,6 +291,41 @@ signature = "sha256=" + hmac.new(secret, payload, hashlib.sha256).hexdigest()
 | P3 | ✅ | CLI Tool + Repo Size + Bulk Operations + Precise Webhook Refs |
 | P4 | ✅ | SSH Gateway + Hook Plugin System (BranchProtection + PushLimit) |
 | P5 | ✅ | Docker Deployment + Repository Mirroring |
+| P6 | ✅ | Web Dashboard — 可视化管理所有仓库、策略、Webhooks、镜像 |
+
+## Web Dashboard
+
+OpenGit 提供内置的 Web 管理面板，无需额外安装：
+
+```bash
+# 启动服务器（Dashboard 默认启用）
+./target/release/opengit
+
+# 访问 Dashboard
+open http://localhost:9418/
+```
+
+### Dashboard 功能
+
+| 模块 | 功能 |
+|------|------|
+| 📦 仓库管理 | 创建、删除、搜索仓库，查看仓库详情 |
+| 🛡️ 访问策略 | 可视化配置权限规则，添加/删除策略 |
+| 🔗 Webhooks | 管理 webhook 通知，配置触发事件 |
+| 🪞 镜像同步 | 配置仓库镜像，监控同步状态 |
+| ⚡ 自动化规则 | 配置触发条件和执行动作 |
+| 📋 审计日志 | 查看所有操作的审计记录 |
+| ⚙️ 配置文件 | 可视化编辑 server.toml、policies.yaml 等 |
+| 📥 导入迁移 | 从 Git URL 或 Gitea 服务器批量导入仓库 |
+
+### 界面预览
+
+Dashboard 采用深色主题，支持以下特性：
+
+- **响应式布局** — 适配桌面和移动设备
+- **实时状态** — 服务器连接状态实时显示
+- **操作确认** — 危险操作需要二次确认
+- **Token 认证** — 支持 Bearer Token 认证
 
 ## License
 
