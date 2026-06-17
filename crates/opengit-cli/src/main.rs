@@ -119,6 +119,11 @@ enum Commands {
     ImportStatus,
     /// Health check
     Health,
+    /// Mirror operations: status, issues, targets
+    Mirror {
+        #[command(subcommand)]
+        action: MirrorActions,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -207,6 +212,123 @@ enum WebhookActions {
         /// Webhook index (from list)
         idx: usize,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum MirrorActions {
+    /// Show mirror status and summary
+    Status {
+        /// Filter by repository name
+        #[arg(long)]
+        repo: Option<String>,
+        /// Show only active issues
+        #[arg(long, short)]
+        issues: bool,
+        /// Number of recent entries to show
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
+    /// List configured mirror targets
+    Targets,
+    /// Add a mirror target
+    AddTarget {
+        /// Target name (e.g., github, gitee)
+        name: String,
+        /// Remote URL template (use {repo} for repo name)
+        url: String,
+        /// Repos to mirror (comma-separated, or "*" for all)
+        #[arg(long, default_value = "*")]
+        repos: String,
+        /// SSH key path for this target
+        #[arg(long)]
+        ssh_key: Option<String>,
+    },
+    /// Remove a mirror target
+    RemoveTarget {
+        /// Target name
+        name: String,
+    },
+    /// Configure alert channels
+    Alert {
+        #[command(subcommand)]
+        action: AlertActions,
+    },
+    /// Resolve an active issue
+    Resolve {
+        /// Issue/Alert ID
+        id: String,
+        /// Resolution note
+        #[arg(long)]
+        note: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum AlertActions {
+    /// Show alert configuration
+    Show,
+    /// Configure webhook alerts
+    Webhook {
+        /// Enable/disable webhook alerts
+        #[arg(long)]
+        enabled: Option<bool>,
+        /// Webhook URL
+        #[arg(long)]
+        url: Option<String>,
+        /// Webhook secret
+        #[arg(long)]
+        secret: Option<String>,
+    },
+    /// Configure email alerts
+    Email {
+        /// Enable/disable email alerts
+        #[arg(long)]
+        enabled: Option<bool>,
+        /// SMTP server
+        #[arg(long)]
+        smtp_server: Option<String>,
+        /// SMTP port
+        #[arg(long)]
+        smtp_port: Option<u16>,
+        /// SMTP username
+        #[arg(long)]
+        smtp_username: Option<String>,
+        /// SMTP password
+        #[arg(long)]
+        smtp_password: Option<String>,
+        /// From address
+        #[arg(long)]
+        email_from: Option<String>,
+        /// To addresses (comma-separated)
+        #[arg(long)]
+        email_to: Option<String>,
+    },
+    /// Configure Feishu alerts
+    Feishu {
+        /// Enable/disable Feishu alerts
+        #[arg(long)]
+        enabled: Option<bool>,
+        /// Feishu webhook URL
+        #[arg(long)]
+        webhook: Option<String>,
+        /// Mention list (comma-separated phones/open-ids)
+        #[arg(long)]
+        mentions: Option<String>,
+    },
+    /// Set severity threshold
+    Threshold {
+        /// Minimum severity to alert (critical, high, medium, low)
+        #[arg(value_enum)]
+        severity: SeverityLevel,
+    },
+}
+
+#[derive(clap::ValueEnum, Debug, Clone)]
+enum SeverityLevel {
+    Critical,
+    High,
+    Medium,
+    Low,
 }
 
 #[tokio::main]
@@ -539,6 +661,132 @@ async fn main() -> Result<()> {
             Ok(msg) => println!("✅ {}", msg),
             Err(e) => println!("❌ Server unreachable: {}", e),
         },
+        Commands::Mirror { action } => match action {
+            MirrorActions::Status { repo, issues, limit } => {
+                let status = client.mirror_status(repo.as_deref(), issues, limit).await?;
+                println!("🐉 Mirror Status");
+                println!("═══════════════════════════════════════");
+                println!("   Repos mirrored:     {}", status.total_repos);
+                println!("   Total pushes:       {}", status.total_pushes);
+                println!("   Successful:         {}", status.successful_pushes);
+                println!("   Failed:             {}", status.failed_pushes);
+                println!("   Blocked:            {}", status.blocked_operations);
+                println!("   Active alerts:      {}", status.active_alerts);
+                
+                if !status.issues.is_empty() && issues {
+                    println!("\n⚠️  Active Issues:");
+                    for issue in &status.issues {
+                        let emoji = match issue.severity.as_str() {
+                            "critical" => "🔴",
+                            "high" => "🟠",
+                            "medium" => "🟡",
+                            _ => "🟢",
+                        };
+                        println!("   {} [{}] {} — {}", emoji, issue.error_code, issue.repo, &issue.message[..issue.message.len().min(40)]);
+                    }
+                }
+                
+                if !status.recent.is_empty() {
+                    println!("\n📋 Recent Operations:");
+                    for entry in &status.recent {
+                        println!("   {}", entry);
+                    }
+                }
+            }
+            MirrorActions::Targets => {
+                let targets = client.mirror_targets().await?;
+                if targets.is_empty() {
+                    println!("No mirror targets configured.");
+                } else {
+                    println!("{:<15} {:<40} {:<20}", "NAME", "URL", "REPOS");
+                    println!("─────────────────────────────────────────────────────────────");
+                    for t in &targets {
+                        println!("{:<15} {:<40} {}", t.name, t.url, t.repos.join(", "));
+                    }
+                }
+            }
+            MirrorActions::AddTarget { name, url, repos, ssh_key } => {
+                let repos_list: Vec<String> = if repos == "*" {
+                    vec!["*".to_string()]
+                } else {
+                    repos.split(',').map(|s| s.trim().to_string()).collect()
+                };
+                client.add_mirror_target(&name, &url, &repos_list, ssh_key.as_deref()).await?;
+                println!("✅ Added mirror target: {} → {}", name, url);
+            }
+            MirrorActions::RemoveTarget { name } => {
+                client.remove_mirror_target(&name).await?;
+                println!("✅ Removed mirror target: {}", name);
+            }
+            MirrorActions::Alert { action } => match action {
+                AlertActions::Show => {
+                    let config = client.get_alert_config().await?;
+                    println!("🐉 Alert Configuration");
+                    println!("═══════════════════════════════════════");
+                    println!("   Webhook:   {} ({})", 
+                        if config.webhook_enabled { "enabled" } else { "disabled" },
+                        config.webhook_url.as_deref().unwrap_or("-")
+                    );
+                    println!("   Email:     {} ({})",
+                        if config.email_enabled { "enabled" } else { "disabled" },
+                        config.smtp_server.as_deref().unwrap_or("-")
+                    );
+                    println!("   Feishu:    {} ({})",
+                        if config.feishu_enabled { "enabled" } else { "disabled" },
+                        config.feishu_webhook.as_deref().unwrap_or("-")
+                    );
+                    println!("   Threshold: {:?}", config.severity_threshold);
+                }
+                AlertActions::Webhook { enabled, url, secret } => {
+                    client.update_alert_webhook(
+                        enabled.unwrap_or(true),
+                        url.as_deref(),
+                        secret.as_deref(),
+                    ).await?;
+                    println!("✅ Updated webhook alert config");
+                }
+                AlertActions::Email { enabled, smtp_server, smtp_port, smtp_username, smtp_password, email_from, email_to } => {
+                    let to_list: Option<Vec<String>> = email_to.map(|s| 
+                        s.split(',').map(|e| e.trim().to_string()).collect()
+                    );
+                    client.update_alert_email(
+                        enabled.unwrap_or(true),
+                        smtp_server.as_deref(),
+                        smtp_port,
+                        smtp_username.as_deref(),
+                        smtp_password.as_deref(),
+                        email_from.as_deref(),
+                        to_list.as_deref(),
+                    ).await?;
+                    println!("✅ Updated email alert config");
+                }
+                AlertActions::Feishu { enabled, webhook, mentions } => {
+                    let mention_list: Option<Vec<String>> = mentions.map(|s|
+                        s.split(',').map(|e| e.trim().to_string()).collect()
+                    );
+                    client.update_alert_feishu(
+                        enabled.unwrap_or(true),
+                        webhook.as_deref(),
+                        mention_list.as_deref(),
+                    ).await?;
+                    println!("✅ Updated Feishu alert config");
+                }
+                AlertActions::Threshold { severity } => {
+                    let sev = match severity {
+                        SeverityLevel::Critical => "critical",
+                        SeverityLevel::High => "high",
+                        SeverityLevel::Medium => "medium",
+                        SeverityLevel::Low => "low",
+                    };
+                    client.set_alert_threshold(sev).await?;
+                    println!("✅ Set alert threshold to: {}", sev);
+                }
+            },
+            MirrorActions::Resolve { id, note } => {
+                client.resolve_mirror_issue(&id, &note).await?;
+                println!("✅ Resolved issue: {}", id);
+            }
+        },
     }
 
     Ok(())
@@ -642,6 +890,52 @@ struct MigrationResultInfo {
     failed: usize,
     results: Vec<ImportResultInfo>,
     elapsed_secs: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MirrorStatusInfo {
+    total_repos: usize,
+    total_pushes: usize,
+    successful_pushes: usize,
+    failed_pushes: usize,
+    blocked_operations: usize,
+    active_alerts: usize,
+    issues: Vec<MirrorIssueInfo>,
+    recent: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MirrorIssueInfo {
+    id: String,
+    error_code: String,
+    message: String,
+    severity: String,
+    repo: String,
+    timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MirrorTargetInfo {
+    name: String,
+    url: String,
+    repos: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AlertConfigInfo {
+    webhook_enabled: bool,
+    webhook_url: Option<String>,
+    webhook_secret: Option<String>,
+    email_enabled: bool,
+    smtp_server: Option<String>,
+    smtp_port: u16,
+    smtp_username: Option<String>,
+    email_from: Option<String>,
+    email_to: Vec<String>,
+    feishu_enabled: bool,
+    feishu_webhook: Option<String>,
+    feishu_mentions: Vec<String>,
+    severity_threshold: String,
 }
 
 struct ApiClient {
@@ -928,5 +1222,137 @@ impl ApiClient {
 
     async fn import_status(&self) -> Result<Vec<ImportResultInfo>> {
         self.get("/api/import/status").await
+    }
+
+    // ─── Mirror API Methods ────────────────────────────────────────
+
+    async fn mirror_status(
+        &self,
+        repo: Option<&str>,
+        issues_only: bool,
+        limit: usize,
+    ) -> Result<MirrorStatusInfo> {
+        let path = if let Some(r) = repo {
+            format!("/api/mirror/status?repo={}&issues={}&limit={}", r, issues_only, limit)
+        } else {
+            format!("/api/mirror/status?issues={}&limit={}", issues_only, limit)
+        };
+        self.get(&path).await
+    }
+
+    async fn mirror_targets(&self) -> Result<Vec<MirrorTargetInfo>> {
+        self.get("/api/mirror/targets").await
+    }
+
+    async fn add_mirror_target(
+        &self,
+        name: &str,
+        url: &str,
+        repos: &[String],
+        ssh_key: Option<&str>,
+    ) -> Result<()> {
+        let mut req = self
+            .http
+            .post(format!("{}/api/mirror/targets", self.base_url))
+            .json(&serde_json::json!({
+                "name": name,
+                "url": url,
+                "repos": repos,
+                "ssh_key": ssh_key,
+                "enabled": true
+            }));
+        if let Some(auth) = self.auth_header() {
+            req = req.header("Authorization", auth);
+        }
+        let resp = req.send().await.context("Request failed")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("HTTP {}: {}", status, body);
+        }
+        Ok(())
+    }
+
+    async fn remove_mirror_target(&self, name: &str) -> Result<()> {
+        self.delete(&format!("/api/mirror/targets/{}", name)).await
+    }
+
+    async fn get_alert_config(&self) -> Result<AlertConfigInfo> {
+        self.get("/api/mirror/alerts/config").await
+    }
+
+    async fn update_alert_webhook(
+        &self,
+        enabled: bool,
+        url: Option<&str>,
+        secret: Option<&str>,
+    ) -> Result<()> {
+        self.post_json(
+            "/api/mirror/alerts/webhook",
+            &serde_json::json!({
+                "webhook_enabled": enabled,
+                "webhook_url": url,
+                "webhook_secret": secret
+            }),
+        )
+        .await
+    }
+
+    async fn update_alert_email(
+        &self,
+        enabled: bool,
+        smtp_server: Option<&str>,
+        smtp_port: Option<u16>,
+        smtp_username: Option<&str>,
+        smtp_password: Option<&str>,
+        email_from: Option<&str>,
+        email_to: Option<&[String]>,
+    ) -> Result<()> {
+        self.post_json(
+            "/api/mirror/alerts/email",
+            &serde_json::json!({
+                "email_enabled": enabled,
+                "smtp_server": smtp_server,
+                "smtp_port": smtp_port,
+                "smtp_username": smtp_username,
+                "smtp_password": smtp_password,
+                "email_from": email_from,
+                "email_to": email_to
+            }),
+        )
+        .await
+    }
+
+    async fn update_alert_feishu(
+        &self,
+        enabled: bool,
+        webhook: Option<&str>,
+        mentions: Option<&[String]>,
+    ) -> Result<()> {
+        self.post_json(
+            "/api/mirror/alerts/feishu",
+            &serde_json::json!({
+                "feishu_enabled": enabled,
+                "feishu_webhook": webhook,
+                "feishu_mentions": mentions
+            }),
+        )
+        .await
+    }
+
+    async fn set_alert_threshold(&self, severity: &str) -> Result<()> {
+        self.post_json(
+            "/api/mirror/alerts/threshold",
+            &serde_json::json!({ "severity": severity }),
+        )
+        .await
+    }
+
+    async fn resolve_mirror_issue(&self, id: &str, note: &str) -> Result<()> {
+        self.post_json(
+            &format!("/api/mirror/issues/{}/resolve", id),
+            &serde_json::json!({ "note": note }),
+        )
+        .await
     }
 }

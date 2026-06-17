@@ -16,6 +16,7 @@ pub mod mirror;
 pub mod plugin;
 pub mod policy;
 pub mod repository;
+pub mod webhook;
 
 pub use audit::{AuditEntry, AuditLog};
 pub use hook::{HookContext, HookPipeline, HookResult};
@@ -32,3 +33,4 @@ pub use mirror::{
 pub use plugin::{HookPlugin, PluginManager, PluginsFile};
 pub use policy::{Action, Permission, Policy, PolicyEngine};
 pub use repository::Repository;
+pub use webhook::{AlertConfig, AlertDispatcher, AlertEntry as MirrorAlertEntry, AlertStore};
