@@ -18,3 +18,4 @@ hex = { workspace = true }
 git2 = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
+regex = "1"

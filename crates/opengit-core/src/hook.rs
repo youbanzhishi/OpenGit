@@ -2,7 +2,10 @@
 //!
 //! The hook pipeline is the enforcement layer. Even if someone bypasses
 //! the API, the Git hooks will still enforce policy.
+//!
+//! P7: Added AI Guard integration for code semantic analysis.
 
+use crate::ai_guard::AiGuard;
 use crate::audit::{AuditEntry, AuditLog};
 use crate::policy::{Action, PolicyEngine};
 use serde::{Deserialize, Serialize};
@@ -64,13 +67,60 @@ pub struct RefResult {
 pub struct HookPipeline {
     policy_engine: PolicyEngine,
     audit_log: AuditLog,
+    /// AI Guard for code semantic analysis (P7)
+    ai_guard: Option<AiGuard>,
 }
 
 impl HookPipeline {
+    /// Create with policy engine and audit log
     pub fn new(policy_engine: PolicyEngine, audit_log: AuditLog) -> Self {
         Self {
             policy_engine,
             audit_log,
+            ai_guard: None,
+        }
+    }
+
+    /// Create with AI Guard enabled
+    pub fn with_ai_guard(policy_engine: PolicyEngine, audit_log: AuditLog, ai_guard: AiGuard) -> Self {
+        Self {
+            policy_engine,
+            audit_log,
+            ai_guard: Some(ai_guard),
+        }
+    }
+
+    /// Enable AI Guard
+    pub fn enable_ai_guard(&mut self, ai_guard: AiGuard) {
+        self.ai_guard = Some(ai_guard);
+    }
+
+    /// Check if AI Guard is enabled
+    pub fn has_ai_guard(&self) -> bool {
+        self.ai_guard.is_some()
+    }
+
+    /// Evaluate commit messages using AI Guard
+    pub fn evaluate_with_ai_guard(&self, commit_messages: &[String]) -> Option<crate::ai_guard::GuardResult> {
+        if let Some(guard) = &self.ai_guard {
+            for msg in commit_messages {
+                let result = guard.evaluate_commit_message(msg);
+                if !result.allowed {
+                    return Some(result);
+                }
+            }
+            Some(crate::ai_guard::GuardResult::allowed())
+        } else {
+            None
+        }
+    }
+
+    /// Evaluate diff content using AI Guard
+    pub fn evaluate_diff_with_ai_guard(&self, diff_content: &str) -> Option<crate::ai_guard::GuardResult> {
+        if let Some(guard) = &self.ai_guard {
+            Some(guard.evaluate_diff(diff_content))
+        } else {
+            None
         }
     }
 

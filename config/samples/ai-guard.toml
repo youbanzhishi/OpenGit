@@ -1,0 +1,113 @@
+# AI Guard 配置 — 代码语义分析规则
+#
+# 功能：
+# - 危险命令检测（rm -rf, git push --force）
+# - 保护分支检测
+# - 批量删除检测
+# - 自定义规则
+
+[ai_guard]
+enabled = true
+
+# 保护分支列表（禁止删除）
+protected_branches = [
+    "master",
+    "main", 
+    "develop",
+    "release/*",
+    "hotfix/*"
+]
+
+# 批量删除阈值（超过此数量文件删除将被阻断）
+batch_delete_threshold = 10
+
+[ai_guard.audit]
+# 记录所有事件
+log_all = true
+# 记录警告
+log_warnings = true
+# 警告 Webhook（可选）
+# notify_webhook = "https://ci.example.com/ai-guard-alert"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 默认规则（无需修改，使用自定义规则覆盖）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[ai_guard.default_rules]]
+id = "no-rm-rf"
+name = "禁止 rm -rf 命令"
+severity = "critical"
+action = "block"
+pattern = "rm\\s+-rf"
+message = "检测到危险命令 rm -rf，操作已被阻断"
+
+[[ai_guard.default_rules]]
+id = "no-force-push"
+name = "禁止 force push"
+severity = "high"
+action = "block"
+pattern = "git\\s+push\\s+--force"
+message = "Force push 已禁用，请使用 merge"
+
+[[ai_guard.default_rules]]
+id = "no-git-reset-hard"
+name = "检测 git reset --hard"
+severity = "medium"
+action = "warn"
+pattern = "git\\s+reset\\s+--hard"
+message = "检测到 hard reset，操作将被记录"
+
+[[ai_guard.default_rules]]
+id = "no-git-reflog"
+name = "检测 git reflog 操作"
+severity = "medium"
+action = "warn"
+pattern = "git\\s+reflog"
+message = "检测到 reflog 操作"
+
+[[ai_guard.default_rules]]
+id = "no-chmod-git"
+name = "检测 chmod 修改 .git"
+severity = "high"
+action = "block"
+pattern = "chmod\\s+.*\\.git"
+message = "禁止修改 .git 目录权限"
+
+[[ai_guard.default_rules]]
+id = "no-remove-origin"
+name = "检测删除 remote"
+severity = "medium"
+action = "warn"
+pattern = "git\\s+remote\\s+remove"
+message = "检测到删除 remote 操作"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 自定义规则（根据项目需求添加）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# 示例：禁止删除 node_modules
+# [[ai_guard.custom_rules]]
+# id = "no-delete-node-modules"
+# name = "禁止删除 node_modules"
+# severity = "high"
+# action = "block"
+# pattern = "rm.*node_modules"
+# message = "禁止删除 node_modules"
+
+# 示例：禁止 .env 文件提交
+# [[ai_guard.custom_rules]]
+# id = "no-env-commit"
+# name = "禁止提交 .env 文件"
+# severity = "critical"
+# action = "block"
+# pattern = "\\.env"
+# message = ".env 文件不得提交到仓库"
+
+# 示例：警告大文件
+# [[ai_guard.custom_rules]]
+# id = "warn-large-file"
+# name = "警告大文件"
+# severity = "medium"
+# action = "warn"
+# pattern = "\\.(zip|tar\\.gz|iso|img)$"
+# message = "检测到大文件提交"
