@@ -260,10 +260,7 @@ impl MirrorManager {
             if !self.security.allow_branch_delete {
                 return Some(MirrorError {
                     code: "E001".to_string(),
-                    message: format!(
-                        "🚫 禁止镜像：检测到分支删除操作 ({})",
-                        ctx.ref_name
-                    ),
+                    message: format!("🚫 禁止镜像：检测到分支删除操作 ({})", ctx.ref_name),
                     repo: ctx.repo_name.to_string(),
                     branch: Some(ctx.ref_name.to_string()),
                     severity: MirrorSeverity::High,
@@ -278,10 +275,7 @@ impl MirrorManager {
                 if !self.security.allow_empty_mirror {
                     return Some(MirrorError {
                         code: "E002".to_string(),
-                        message: format!(
-                            "🚫 禁止镜像：源仓库 {} 为空提交",
-                            ctx.repo_name
-                        ),
+                        message: format!("🚫 禁止镜像：源仓库 {} 为空提交", ctx.repo_name),
                         repo: ctx.repo_name.to_string(),
                         branch: Some(ctx.ref_name.to_string()),
                         severity: MirrorSeverity::High,
@@ -340,10 +334,7 @@ impl MirrorManager {
             if ctx.new_sha == NULL_SHA {
                 return Some(MirrorError {
                     code: "E004".to_string(),
-                    message: format!(
-                        "🚫 禁止镜像：保护分支 {} 禁止删除",
-                        ctx.ref_name
-                    ),
+                    message: format!("🚫 禁止镜像：保护分支 {} 禁止删除", ctx.ref_name),
                     repo: ctx.repo_name.to_string(),
                     branch: Some(ctx.ref_name.to_string()),
                     severity: MirrorSeverity::Critical,
@@ -452,10 +443,7 @@ impl MirrorManager {
     }
 
     /// Push to all mirror targets
-    pub async fn push_to_mirrors(
-        &self,
-        ctx: &MirrorPushContext,
-    ) -> Vec<MirrorPushResult> {
+    pub async fn push_to_mirrors(&self, ctx: &MirrorPushContext) -> Vec<MirrorPushResult> {
         let mut results = Vec::new();
         let targets = self.targets_for_repo(ctx.repo_name);
 
@@ -488,9 +476,7 @@ impl MirrorManager {
 
         info!(
             "Pushing {} to {} ({})",
-            ctx.ref_name,
-            target.name,
-            remote_url
+            ctx.ref_name, target.name, remote_url
         );
 
         // 构建 git push 命令
