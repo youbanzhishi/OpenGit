@@ -290,7 +290,7 @@ signature = "sha256=" + hmac.new(secret, payload, hashlib.sha256).hexdigest()
 | P2 | ✅ | Streaming + Persistent State + Webhooks + Stats |
 | P3 | ✅ | CLI Tool + Repo Size + Bulk Operations + Precise Webhook Refs |
 | P4 | ✅ | SSH Gateway + Hook Plugin System (BranchProtection + PushLimit) |
-| P5 | 🔄 | Docker Deployment + Repository Mirroring |
+| P5 | ✅ | Docker Deployment + Repository Mirroring |
 
 ## License
 
