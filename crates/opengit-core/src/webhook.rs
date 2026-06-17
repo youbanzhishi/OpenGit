@@ -1,7 +1,7 @@
 //! Mirror Alert & Notification System
 //!
 //! P5.2: Alert channels for mirror operations - Webhook, Email, Feishu
-//! 
+//!
 //! Alert flow:
 //! 1. Mirror push fails → create MirrorAlert
 //! 2. AlertDispatcher routes to enabled channels
@@ -28,7 +28,7 @@ pub struct AlertConfig {
     /// Webhook secret for HMAC signature
     #[serde(default)]
     pub webhook_secret: Option<String>,
-    
+
     /// Enable email alerts
     #[serde(default)]
     pub email_enabled: bool,
@@ -50,7 +50,7 @@ pub struct AlertConfig {
     /// To addresses (comma-separated)
     #[serde(default)]
     pub email_to: Vec<String>,
-    
+
     /// Enable Feishu alerts
     #[serde(default)]
     pub feishu_enabled: bool,
@@ -60,7 +60,7 @@ pub struct AlertConfig {
     /// Feishu mention list (phone numbers or open IDs)
     #[serde(default)]
     pub feishu_mentions: Vec<String>,
-    
+
     /// Alert threshold by severity
     #[serde(default)]
     pub severity_threshold: MirrorSeverity,
@@ -170,15 +170,21 @@ impl MirrorAlert {
     ) -> Self {
         let now = chrono_lite_now();
         let first_error = errors.first();
-        
+
         Self {
             id: uuid_v4(),
             timestamp: now,
             repo: repo.to_string(),
             branch: first_error.and_then(|e| e.branch.clone()),
-            error_code: first_error.map(|e| e.code.clone()).unwrap_or_else(|| "E099".to_string()),
-            message: first_error.map(|e| e.message.clone()).unwrap_or_else(|| "Unknown error".to_string()),
-            severity: first_error.map(|e| e.severity).unwrap_or(MirrorSeverity::High),
+            error_code: first_error
+                .map(|e| e.code.clone())
+                .unwrap_or_else(|| "E099".to_string()),
+            message: first_error
+                .map(|e| e.message.clone())
+                .unwrap_or_else(|| "Unknown error".to_string()),
+            severity: first_error
+                .map(|e| e.severity)
+                .unwrap_or(MirrorSeverity::High),
             targets: results.iter().map(|r| r.target.clone()).collect(),
             old_sha: results.first().map(|r| r.old_sha.clone()),
             new_sha: results.first().map(|r| r.new_sha.clone()),
@@ -231,13 +237,13 @@ Status: {}
     pub fn format_feishu_card(&self) -> serde_json::Value {
         let status_color = match self.severity {
             MirrorSeverity::Critical => "red",
-            MirrorSeverity::High => "orange", 
+            MirrorSeverity::High => "orange",
             MirrorSeverity::Medium => "yellow",
             MirrorSeverity::Low => "green",
         };
-        
+
         let mentions = self.targets.join(", ");
-        
+
         serde_json::json!({
             "msg_type": "interactive",
             "card": {
@@ -334,10 +340,7 @@ impl AlertDispatcher {
     pub async fn dispatch(&self, alert: &MirrorAlert) {
         // Check severity threshold
         if !alert.severity.should_alert(&self.config.severity_threshold) {
-            info!(
-                "Alert {} below threshold, skipping notification",
-                alert.id
-            );
+            info!("Alert {} below threshold, skipping notification", alert.id);
             return;
         }
 
@@ -345,11 +348,11 @@ impl AlertDispatcher {
         if self.config.webhook_enabled {
             self.send_webhook(alert).await;
         }
-        
+
         if self.config.email_enabled {
             self.send_email(alert).await;
         }
-        
+
         if self.config.feishu_enabled {
             self.send_feishu(alert).await;
         }
@@ -415,14 +418,27 @@ impl AlertDispatcher {
         // Build mail command
         let mut cmd = Command::new("sendmail");
         cmd.arg("-S")
-           .arg(format!("smtp={}", smtp_server))
-           .arg("-S")
-           .arg(format!("smtp-auth-user={}", self.config.smtp_username.as_deref().unwrap_or("")))
-           .arg("-S")
-           .arg(format!("smtp-auth-pass={}", self.config.smtp_password.as_deref().unwrap_or("")))
-           .arg("-S")
-           .arg(format!("smtp-auth={}", if self.config.smtp_username.is_some() { "login" } else { "none" }))
-           .arg("-t");
+            .arg(format!("smtp={}", smtp_server))
+            .arg("-S")
+            .arg(format!(
+                "smtp-auth-user={}",
+                self.config.smtp_username.as_deref().unwrap_or("")
+            ))
+            .arg("-S")
+            .arg(format!(
+                "smtp-auth-pass={}",
+                self.config.smtp_password.as_deref().unwrap_or("")
+            ))
+            .arg("-S")
+            .arg(format!(
+                "smtp-auth={}",
+                if self.config.smtp_username.is_some() {
+                    "login"
+                } else {
+                    "none"
+                }
+            ))
+            .arg("-t");
 
         if let Some(from) = &self.config.email_from {
             cmd.arg("-f").arg(from);
@@ -435,17 +451,17 @@ impl AlertDispatcher {
              Content-Type: text/plain; charset=utf-8\n\n\
              {}",
             self.config.email_to.join(", "),
-            self.config.email_from.as_deref().unwrap_or("opengit@localhost"),
+            self.config
+                .email_from
+                .as_deref()
+                .unwrap_or("opengit@localhost"),
             subject,
             body
         );
 
         cmd.arg("-t");
-        
-        let output = cmd
-            .arg("-oi")
-            .stdin(std::process::Stdio::piped())
-            .output();
+
+        let output = cmd.arg("-oi").stdin(std::process::Stdio::piped()).output();
 
         match output {
             Ok(o) if o.status.success() => info!("Email alert sent: {}", alert.id),
@@ -478,33 +494,36 @@ impl AlertDispatcher {
     /// Generic HTTP POST helper
     async fn send_http_post(&self, url: &str, payload: &serde_json::Value) -> Result<()> {
         let json_str = payload.to_string();
-        
+
         let mut cmd = Command::new("curl");
         cmd.arg("-s")
-           .arg("-X")
-           .arg("POST")
-           .arg("-H")
-           .arg("Content-Type: application/json")
-           .arg("-d")
-           .arg(&json_str)
-           .arg(url);
+            .arg("-X")
+            .arg("POST")
+            .arg("-H")
+            .arg("Content-Type: application/json")
+            .arg("-d")
+            .arg(&json_str)
+            .arg(url);
 
         // Add HMAC signature if secret configured
         if let Some(ref secret) = self.config.webhook_secret {
             use std::io::Write;
-            
+
             let mut mac = hmac_sha256::HMAC::new(secret.as_bytes());
             mac.update(json_str.as_bytes());
             let signature = hex::encode(mac.finalize());
-            
+
             cmd.arg("-H")
-               .arg(format!("X-Signature: sha256={}", signature));
+                .arg(format!("X-Signature: sha256={}", signature));
         }
 
         let output = cmd.output()?;
-        
+
         if !output.status.success() {
-            anyhow::bail!("HTTP request failed: {}", String::from_utf8_lossy(&output.stderr));
+            anyhow::bail!(
+                "HTTP request failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
 
         Ok(())
@@ -514,14 +533,14 @@ impl AlertDispatcher {
 /// Generate UUID v4 (simplified)
 fn uuid_v4() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    
+
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    
+
     let random: u64 = rand_simple();
-    
+
     format!(
         "{:016x}-{:04x}-4{:03x}-{:04x}-{:012x}",
         timestamp as u64,
@@ -536,23 +555,23 @@ fn uuid_v4() -> String {
 fn rand_simple() -> u64 {
     use std::collections::hash_map::RandomState;
     use std::hash::{BuildHasher, Hasher};
-    
+
     let state = RandomState::new();
     let mut hasher = state.build_hasher();
-    hasher.write_u128(std::time::SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos());
+    hasher.write_u128(
+        std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    );
     hasher.write_u128(rand_simple as u128)
 }
 
 fn chrono_lite_now() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap();
-    
+
+    let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+
     let secs = duration.as_secs();
     let days = secs / 86400;
     let year = 1970 + days / 365;
@@ -562,8 +581,11 @@ fn chrono_lite_now() -> String {
     let hour = (secs % 86400) / 3600;
     let min = (secs % 3600) / 60;
     let sec = secs % 60;
-    
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", year, month, mday, hour, min, sec)
+
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        year, month, mday, hour, min, sec
+    )
 }
 
 /// Alert store - persists alerts for audit and status queries
@@ -643,7 +665,7 @@ mod tests {
     fn test_severity_threshold() {
         let critical = MirrorSeverity::Critical;
         let medium = MirrorSeverity::Medium;
-        
+
         assert!(critical.should_alert(&medium));
         assert!(!medium.should_alert(&critical));
     }
@@ -692,9 +714,9 @@ mod tests {
         });
 
         assert_eq!(store.active().len(), 1);
-        
+
         store.resolve("alert-1", "Fixed by rebasing");
-        
+
         assert_eq!(store.active().len(), 0);
     }
 

@@ -99,7 +99,9 @@ pub struct AuditLog {
 
 impl AuditLog {
     pub fn new() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+        }
     }
 
     /// Log a mirror push operation
@@ -169,12 +171,7 @@ impl AuditLog {
     }
 
     /// Log alert created
-    pub fn log_alert_created(
-        &mut self,
-        repo: &str,
-        alert_id: &str,
-        error: &MirrorError,
-    ) {
+    pub fn log_alert_created(&mut self, repo: &str, alert_id: &str, error: &MirrorError) {
         let entry = AuditEntry {
             id: uuid_v4(),
             timestamp: now_rfc3339(),
@@ -194,12 +191,7 @@ impl AuditLog {
     }
 
     /// Log alert resolution
-    pub fn log_alert_resolved(
-        &mut self,
-        repo: &str,
-        alert_id: &str,
-        note: &str,
-    ) {
+    pub fn log_alert_resolved(&mut self, repo: &str, alert_id: &str, note: &str) {
         let entry = AuditEntry {
             id: uuid_v4(),
             timestamp: now_rfc3339(),
@@ -217,11 +209,7 @@ impl AuditLog {
     }
 
     /// Log target added
-    pub fn log_target_added(
-        &mut self,
-        target_name: &str,
-        target_url: &str,
-    ) {
+    pub fn log_target_added(&mut self, target_name: &str, target_url: &str) {
         let entry = AuditEntry {
             id: uuid_v4(),
             timestamp: now_rfc3339(),
@@ -291,9 +279,9 @@ impl AuditLog {
             .iter()
             .filter(|e| e.operation == AuditOperation::MirrorPush)
             .filter_map(|e| match &e.details {
-                AuditDetails::MirrorPush { targets, .. } => Some(
-                    targets.iter().any(|t| !t.success)
-                ),
+                AuditDetails::MirrorPush { targets, .. } => {
+                    Some(targets.iter().any(|t| !t.success))
+                }
                 _ => Some(false),
             })
             .filter(|x| *x)
@@ -345,12 +333,12 @@ impl AuditEntry {
         };
 
         let details = match &self.details {
-            AuditDetails::MirrorPush { targets, blocked_by } => {
+            AuditDetails::MirrorPush {
+                targets,
+                blocked_by,
+            } => {
                 if blocked_by.is_some() {
-                    format!(
-                        "BLOCKED by: {}",
-                        blocked_by.as_ref().unwrap().join(", ")
-                    )
+                    format!("BLOCKED by: {}", blocked_by.as_ref().unwrap().join(", "))
                 } else {
                     let success_count = targets.iter().filter(|t| t.success).count();
                     format!(
@@ -361,7 +349,12 @@ impl AuditEntry {
                     )
                 }
             }
-            AuditDetails::AlertEvent { alert_id, error_code, severity, message } => {
+            AuditDetails::AlertEvent {
+                alert_id,
+                error_code,
+                severity,
+                message,
+            } => {
                 format!(
                     "[{}] {} - {}",
                     error_code,
@@ -372,7 +365,11 @@ impl AuditEntry {
             AuditDetails::Resolution { alert_id, note } => {
                 format!("Alert {} - {}", alert_id, note)
             }
-            AuditDetails::ConfigChange { field, old_value, new_value } => {
+            AuditDetails::ConfigChange {
+                field,
+                old_value,
+                new_value,
+            } => {
                 format!(
                     "{}: {} → {}",
                     field,
@@ -380,18 +377,17 @@ impl AuditEntry {
                     new_value.as_deref().unwrap_or("(none)")
                 )
             }
-            AuditDetails::TargetChange { target_name, target_url } => {
+            AuditDetails::TargetChange {
+                target_name,
+                target_url,
+            } => {
                 format!("{} ({})", target_name, target_url)
             }
         };
 
         format!(
             "{} {} | {} | {} | {}",
-            emoji,
-            self.timestamp,
-            op_name,
-            self.repo,
-            details
+            emoji, self.timestamp, op_name, self.repo, details
         )
     }
 }
@@ -402,7 +398,7 @@ fn uuid_v4() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    
+
     let random: u64 = {
         use std::collections::hash_map::RandomState;
         use std::hash::{BuildHasher, Hasher};
@@ -411,7 +407,7 @@ fn uuid_v4() -> String {
         hasher.write_u128(timestamp);
         hasher.finish()
     };
-    
+
     format!(
         "{:016x}-{:04x}-4{:03x}-{:04x}-{:012x}",
         timestamp as u64,
@@ -424,10 +420,8 @@ fn uuid_v4() -> String {
 
 /// Get current time as RFC3339
 fn now_rfc3339() -> String {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap();
-    
+    let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+
     let secs = duration.as_secs();
     let days = secs / 86400;
     let year = 1970 + days / 365;
@@ -437,8 +431,11 @@ fn now_rfc3339() -> String {
     let hour = (secs % 86400) / 3600;
     let min = (secs % 3600) / 60;
     let sec = secs % 60;
-    
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", year, month, mday, hour, min, sec)
+
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        year, month, mday, hour, min, sec
+    )
 }
 
 /// Mirror status summary
@@ -456,32 +453,37 @@ impl AuditLog {
     /// Generate status summary
     pub fn status_summary(&self) -> MirrorStatusSummary {
         let mut summary = MirrorStatusSummary::default();
-        
-        summary.total_repos = self.entries
+
+        summary.total_repos = self
+            .entries
             .iter()
             .filter(|e| e.repo != "*")
             .map(|e| e.repo.clone())
             .collect::<std::collections::HashSet<_>>()
             .len();
 
-        summary.total_pushes = self.entries
+        summary.total_pushes = self
+            .entries
             .iter()
             .filter(|e| e.operation == AuditOperation::MirrorPush)
             .count();
 
-        summary.successful_pushes = self.entries
+        summary.successful_pushes = self
+            .entries
             .iter()
             .filter(|e| e.operation == AuditOperation::MirrorPush)
             .filter_map(|e| match &e.details {
-                AuditDetails::MirrorPush { targets, blocked_by: None } => {
-                    Some(targets.iter().all(|t| t.success))
-                }
+                AuditDetails::MirrorPush {
+                    targets,
+                    blocked_by: None,
+                } => Some(targets.iter().all(|t| t.success)),
                 _ => None,
             })
             .filter(|x| *x)
             .count();
 
-        summary.failed_pushes = self.entries
+        summary.failed_pushes = self
+            .entries
             .iter()
             .filter(|e| e.operation == AuditOperation::MirrorPush)
             .filter_map(|e| match &e.details {
@@ -494,13 +496,15 @@ impl AuditLog {
             .count();
 
         summary.blocked_operations = self.blocked_count();
-        
+
         // Active alerts = AlertCreated - AlertResolved
-        let created = self.entries
+        let created = self
+            .entries
             .iter()
             .filter(|e| e.operation == AuditOperation::AlertCreated)
             .count();
-        let resolved = self.entries
+        let resolved = self
+            .entries
             .iter()
             .filter(|e| e.operation == AuditOperation::AlertResolved)
             .count();
@@ -517,7 +521,7 @@ mod tests {
     #[test]
     fn test_audit_log_record() {
         let mut log = AuditLog::new();
-        
+
         let results = vec![
             MirrorPushResult {
                 target: "github".to_string(),
@@ -541,8 +545,14 @@ mod tests {
             },
         ];
 
-        log.log_mirror_push("test-repo", "refs/heads/main", Some("developer"), &results, &[]);
-        
+        log.log_mirror_push(
+            "test-repo",
+            "refs/heads/main",
+            Some("developer"),
+            &results,
+            &[],
+        );
+
         assert_eq!(log.entries().len(), 1);
         assert_eq!(log.failed_count(), 1);
     }
@@ -552,7 +562,7 @@ mod tests {
         let mut log = AuditLog::new();
         log.log_blocked("repo1", "main", Some("test"), &[]);
         log.log_blocked("repo2", "main", Some("test"), &[]);
-        
+
         let summary = log.status_summary();
         assert_eq!(summary.blocked_operations, 2);
     }

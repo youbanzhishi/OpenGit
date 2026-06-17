@@ -662,7 +662,11 @@ async fn main() -> Result<()> {
             Err(e) => println!("❌ Server unreachable: {}", e),
         },
         Commands::Mirror { action } => match action {
-            MirrorActions::Status { repo, issues, limit } => {
+            MirrorActions::Status {
+                repo,
+                issues,
+                limit,
+            } => {
                 let status = client.mirror_status(repo.as_deref(), issues, limit).await?;
                 println!("🐉 Mirror Status");
                 println!("═══════════════════════════════════════");
@@ -672,7 +676,7 @@ async fn main() -> Result<()> {
                 println!("   Failed:             {}", status.failed_pushes);
                 println!("   Blocked:            {}", status.blocked_operations);
                 println!("   Active alerts:      {}", status.active_alerts);
-                
+
                 if !status.issues.is_empty() && issues {
                     println!("\n⚠️  Active Issues:");
                     for issue in &status.issues {
@@ -682,10 +686,16 @@ async fn main() -> Result<()> {
                             "medium" => "🟡",
                             _ => "🟢",
                         };
-                        println!("   {} [{}] {} — {}", emoji, issue.error_code, issue.repo, &issue.message[..issue.message.len().min(40)]);
+                        println!(
+                            "   {} [{}] {} — {}",
+                            emoji,
+                            issue.error_code,
+                            issue.repo,
+                            &issue.message[..issue.message.len().min(40)]
+                        );
                     }
                 }
-                
+
                 if !status.recent.is_empty() {
                     println!("\n📋 Recent Operations:");
                     for entry in &status.recent {
@@ -705,13 +715,20 @@ async fn main() -> Result<()> {
                     }
                 }
             }
-            MirrorActions::AddTarget { name, url, repos, ssh_key } => {
+            MirrorActions::AddTarget {
+                name,
+                url,
+                repos,
+                ssh_key,
+            } => {
                 let repos_list: Vec<String> = if repos == "*" {
                     vec!["*".to_string()]
                 } else {
                     repos.split(',').map(|s| s.trim().to_string()).collect()
                 };
-                client.add_mirror_target(&name, &url, &repos_list, ssh_key.as_deref()).await?;
+                client
+                    .add_mirror_target(&name, &url, &repos_list, ssh_key.as_deref())
+                    .await?;
                 println!("✅ Added mirror target: {} → {}", name, url);
             }
             MirrorActions::RemoveTarget { name } => {
@@ -723,52 +740,87 @@ async fn main() -> Result<()> {
                     let config = client.get_alert_config().await?;
                     println!("🐉 Alert Configuration");
                     println!("═══════════════════════════════════════");
-                    println!("   Webhook:   {} ({})", 
-                        if config.webhook_enabled { "enabled" } else { "disabled" },
+                    println!(
+                        "   Webhook:   {} ({})",
+                        if config.webhook_enabled {
+                            "enabled"
+                        } else {
+                            "disabled"
+                        },
                         config.webhook_url.as_deref().unwrap_or("-")
                     );
-                    println!("   Email:     {} ({})",
-                        if config.email_enabled { "enabled" } else { "disabled" },
+                    println!(
+                        "   Email:     {} ({})",
+                        if config.email_enabled {
+                            "enabled"
+                        } else {
+                            "disabled"
+                        },
                         config.smtp_server.as_deref().unwrap_or("-")
                     );
-                    println!("   Feishu:    {} ({})",
-                        if config.feishu_enabled { "enabled" } else { "disabled" },
+                    println!(
+                        "   Feishu:    {} ({})",
+                        if config.feishu_enabled {
+                            "enabled"
+                        } else {
+                            "disabled"
+                        },
                         config.feishu_webhook.as_deref().unwrap_or("-")
                     );
                     println!("   Threshold: {:?}", config.severity_threshold);
                 }
-                AlertActions::Webhook { enabled, url, secret } => {
-                    client.update_alert_webhook(
-                        enabled.unwrap_or(true),
-                        url.as_deref(),
-                        secret.as_deref(),
-                    ).await?;
+                AlertActions::Webhook {
+                    enabled,
+                    url,
+                    secret,
+                } => {
+                    client
+                        .update_alert_webhook(
+                            enabled.unwrap_or(true),
+                            url.as_deref(),
+                            secret.as_deref(),
+                        )
+                        .await?;
                     println!("✅ Updated webhook alert config");
                 }
-                AlertActions::Email { enabled, smtp_server, smtp_port, smtp_username, smtp_password, email_from, email_to } => {
-                    let to_list: Option<Vec<String>> = email_to.map(|s| 
-                        s.split(',').map(|e| e.trim().to_string()).collect()
-                    );
-                    client.update_alert_email(
-                        enabled.unwrap_or(true),
-                        smtp_server.as_deref(),
-                        smtp_port,
-                        smtp_username.as_deref(),
-                        smtp_password.as_deref(),
-                        email_from.as_deref(),
-                        to_list.as_deref(),
-                    ).await?;
+                AlertActions::Email {
+                    enabled,
+                    smtp_server,
+                    smtp_port,
+                    smtp_username,
+                    smtp_password,
+                    email_from,
+                    email_to,
+                } => {
+                    let to_list: Option<Vec<String>> =
+                        email_to.map(|s| s.split(',').map(|e| e.trim().to_string()).collect());
+                    client
+                        .update_alert_email(
+                            enabled.unwrap_or(true),
+                            smtp_server.as_deref(),
+                            smtp_port,
+                            smtp_username.as_deref(),
+                            smtp_password.as_deref(),
+                            email_from.as_deref(),
+                            to_list.as_deref(),
+                        )
+                        .await?;
                     println!("✅ Updated email alert config");
                 }
-                AlertActions::Feishu { enabled, webhook, mentions } => {
-                    let mention_list: Option<Vec<String>> = mentions.map(|s|
-                        s.split(',').map(|e| e.trim().to_string()).collect()
-                    );
-                    client.update_alert_feishu(
-                        enabled.unwrap_or(true),
-                        webhook.as_deref(),
-                        mention_list.as_deref(),
-                    ).await?;
+                AlertActions::Feishu {
+                    enabled,
+                    webhook,
+                    mentions,
+                } => {
+                    let mention_list: Option<Vec<String>> =
+                        mentions.map(|s| s.split(',').map(|e| e.trim().to_string()).collect());
+                    client
+                        .update_alert_feishu(
+                            enabled.unwrap_or(true),
+                            webhook.as_deref(),
+                            mention_list.as_deref(),
+                        )
+                        .await?;
                     println!("✅ Updated Feishu alert config");
                 }
                 AlertActions::Threshold { severity } => {
@@ -1233,7 +1285,10 @@ impl ApiClient {
         limit: usize,
     ) -> Result<MirrorStatusInfo> {
         let path = if let Some(r) = repo {
-            format!("/api/mirror/status?repo={}&issues={}&limit={}", r, issues_only, limit)
+            format!(
+                "/api/mirror/status?repo={}&issues={}&limit={}",
+                r, issues_only, limit
+            )
         } else {
             format!("/api/mirror/status?issues={}&limit={}", issues_only, limit)
         };
