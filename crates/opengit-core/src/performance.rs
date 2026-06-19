@@ -151,12 +151,17 @@ impl GitObjectCache {
 
         let mut freed = 0;
         let target = *current + new_size - self.max_size;
+        let mut keys_to_remove: Vec<_> = Vec::new();
 
         while freed < target && !entries_vec.is_empty() {
             if let Some((key, entry)) = entries_vec.pop() {
                 freed += entry.size;
-                entries.remove(key);
+                keys_to_remove.push(key.clone());
             }
+        }
+
+        for key in keys_to_remove {
+            entries.remove(&key);
         }
 
         *current = current.saturating_sub(freed);
