@@ -243,7 +243,7 @@ impl Condition {
             Condition::Idle { days } => {
                 if let Some(last_action) = recent_actions.first() {
                     if let Some(ts) = parse_timestamp(&last_action.timestamp) {
-                        let idle = now - ts;
+                        let idle = now.duration_since(ts).unwrap_or_default();
                         return idle > Duration::from_secs((*days as u64) * 86400);
                     }
                 }
