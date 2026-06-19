@@ -239,8 +239,9 @@ impl GithubActionsProvider {
     }
 
     fn parse_workflow_runs(&self, data: &serde_json::Value) -> CiResult {
-        let runs = data.get("workflow_runs").and_then(|v| v.as_array());
-        let runs = runs.unwrap_or(&vec![]);
+        let runs_array = data.get("workflow_runs").and_then(|v| v.as_array());
+        let empty: Vec<&serde_json::Value> = vec![];
+        let runs = runs_array.unwrap_or(&empty);
 
         let checks: Vec<CiCheck> = runs
             .iter()
@@ -340,7 +341,9 @@ impl GitlabCiProvider {
     }
 
     fn parse_pipeline(&self, data: &serde_json::Value) -> CiResult {
-        let pipelines = data.as_array().unwrap_or(&vec![]);
+        let pipelines_array = data.as_array();
+        let empty: Vec<&serde_json::Value> = vec![];
+        let pipelines = pipelines_array.unwrap_or(&empty);
 
         let checks: Vec<CiCheck> = pipelines
             .iter()

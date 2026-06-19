@@ -55,11 +55,8 @@ impl WindowCounter {
         true
     }
 
-    /// Get remaining requests in current window
+    /// Get remaining requests in current window (without cleanup)
     fn remaining(&self) -> usize {
-        let now = Instant::now();
-        let window_start = now - self.window;
-        self.timestamps.retain(|&t| t > window_start);
         self.limit.saturating_sub(self.timestamps.len())
     }
 

@@ -620,11 +620,11 @@ impl AlertStore {
     }
 
     /// Mark alert as resolved
-    pub fn resolve(&mut self, alert_id: &str, note: &str) -> Option<&MirrorAlert> {
+    pub fn resolve(&mut self, alert_id: &str, note: &str) -> Option<MirrorAlert> {
         if let Some(alert) = self.alerts.iter_mut().find(|a| a.id == alert_id) {
             alert.resolved = true;
             alert.resolution_note = Some(note.to_string());
-            return Some(alert.clone()).as_ref();
+            return Some(alert.clone());
         }
         None
     }
