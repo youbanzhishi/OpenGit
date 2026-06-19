@@ -20,6 +20,12 @@ pub struct Repository {
     pub description: Option<String>,
     /// Whether the repo is mirrored from another remote
     pub mirror: bool,
+    /// Group ID for classification (optional)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<String>,
+    /// Tags for additional metadata
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 impl Repository {
@@ -46,6 +52,8 @@ impl Repository {
             bare,
             description: None,
             mirror: false,
+            group_id: None,
+            tags: Vec::new(),
         })
     }
 
@@ -59,7 +67,9 @@ impl Repository {
         git2::Repository::init_bare(&repo_path)
             .with_context(|| format!("Failed to init bare repo: {}", repo_path.display()))?;
 
-        Self::open(&repo_path)
+        let mut repo = Self::open(&repo_path)?;
+        repo.description = Some(format!("Created at {}", chrono::Utc::now().to_rfc3339()));
+        Ok(repo)
     }
 
     /// Scan a directory for bare repositories
