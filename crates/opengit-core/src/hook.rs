@@ -164,7 +164,7 @@ impl HookPipeline {
             self.audit_log.log(AuditEntry {
                 id: uuid::Uuid::new_v4().to_string(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
-                operation: crate::audit::AuditOperation::Push,
+                operation: crate::audit::AuditOperation::MirrorPush,
                 repo: ctx.repo.clone(),
                 branch: None,
                 actor: None,
