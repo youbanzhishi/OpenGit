@@ -8,32 +8,13 @@
 //! - Security headers (HSTS, CSP, etc.)
 //! - Token encryption at rest
 
+use rand::RngCore;
+use rcgen::{BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose, SanType};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, DnsName, IpAddr, ServerName};
+use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
-// use tokio_rustls::rustls::{Certificate (deprecated), PrivateKey, ServerConfig};
-use std::io::Error as IoError;
 use std::fs::File;
-use std::io::BufReader;
-use std::path::Path;
-use std::sync::Arc;
-use tokio::net::TcpListener;
-use tokio_rustls::TlsAcceptor;
-
-//! TLS/HTTPS support for OpenGit
-//!
-//! P11: Security hardening - HTTPS, token encryption, security headers
-//!
-//! Features:
-//! - HTTPS server support
-//! - TLS certificate management
-//! - Security headers (HSTS, CSP, etc.)
-//! - Token encryption at rest
-
-use rustls_pemfile::{certs, pkcs8_private_keys};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
-use rustls::{ServerConfig, CipherSuite, TlsVersion as RustlsVersion};
-use std::io::Error as IoError;
-use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Error as IoError};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -100,43 +81,6 @@ impl TlsConfig {
         let certs = certs(&mut BufReader::new(cert_file))
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
             .into_iter()
-            .map(CertificateDer::from)
-            .collect::<Vec<_>>();
-
-        let keys = pkcs8_private_keys(&mut BufReader::new(key_file))
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
-            .into_iter()
-            .map(PrivateKeyDer::from)
-            .collect::<Vec<_>>();
-
-        let key = keys.into_iter().next()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No private key found"))?;
-
-        let mut config = ServerConfig::builder()
-            .with_safe_defaults()
-            .with_no_client_auth()
-            .with_single_cert(certs, key)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-
-        // Configure ALPN
-        if self.http2 {
-            config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-        }
-
-        Ok(config)
-    }
-}
-
-    }
-
-    /// Create RustTLS server config
-    pub fn into_server_config(self) -> std::io::Result<ServerConfig> {
-        let cert_file = File::open(&self.cert_file)?;
-        let key_file = File::open(&self.key_file)?;
-
-        let certs = certs(&mut BufReader::new(cert_file))
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
-            .into_iter()
             .map(Certificate)
             .collect();
 
@@ -168,22 +112,24 @@ impl TlsConfig {
         if !self.enabled {
             return true;
         }
-
         Path::new(&self.cert_file).exists() && Path::new(&self.key_file).exists()
     }
 }
 
 /// Generate self-signed certificate for development
 pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig> {
-    use rustls::pki_types::{CertificateDer, PrivateKeyDer, IpAddr, DnsName, ServerName};
-use rcgen::{BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose, SanType};
-
     let mut params = CertificateParams::default();
     params.is_ca = BasicConstraints::Unconstrained;
     params.distinguished_name = DistinguishedName::new();
     params.distinguished_name.push(DnType::CommonName, "localhost");
+    params.key_usages = vec![KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::KeyEncipherment];
+    params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
+    params.subject_alt_names = vec![
+        SanType::DnsName(DnsName::try_from_ascii_str("localhost").unwrap()),
+        SanType::IpAddress(IpAddr::from([127, 0, 0, 1])),
+    ];
 
-    let cert = rcgen::CertificateParams::from(params)
+    let cert = rcgen::Certificate::from_params(params)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
     let key_pair = cert.get_key_pair();
@@ -224,6 +170,7 @@ pub mod token_encryption {
         Aes256Gcm, Nonce,
     };
     use rand::RngCore;
+    use sha2::{Digest, Sha256};
 
     const NONCE_SIZE: usize = 12;
 
@@ -270,7 +217,6 @@ pub mod token_encryption {
 
     /// Hash a token for lookup (not reversible)
     pub fn hash_token(token: &str) -> String {
-        use sha2::{Sha256, Digest};
         let mut hasher = Sha256::new();
         hasher.update(token.as_bytes());
         hex::encode(hasher.finalize())
@@ -314,7 +260,7 @@ impl Default for SecurityHeadersConfig {
             enabled: true,
             hsts_max_age: 31536000, // 1 year
             hsts_preload: false,
-            csp: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'".into(),
+            csp: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'".into(),
             x_frame_options: "DENY".into(),
             x_content_type_options: "nosniff".into(),
             x_xss_protection: "1; mode=block".into(),
@@ -402,7 +348,7 @@ pub mod audit_encryption {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super:::)
 
     #[test]
     fn test_tls_config_default() {
