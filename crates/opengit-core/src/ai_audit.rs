@@ -13,7 +13,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{error, info, warn};
 
 /// Severity level for anomalies
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
     Low,
