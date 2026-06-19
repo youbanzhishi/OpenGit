@@ -145,18 +145,24 @@ impl GitObjectCache {
         // Need to evict
         let mut entries = self.entries.write().await;
 
-        // Sort by access time (oldest first)
+        // Sort by access time (oldest first) and collect keys to evict
         let mut entries_vec: Vec<_> = entries.iter_mut().collect();
         entries_vec.sort_by(|a, b| a.1.last_accessed.cmp(&b.1.last_accessed));
 
         let mut freed = 0;
         let target = *current + new_size - self.max_size;
+        let mut keys_to_remove: Vec<_> = Vec::new();
 
         while freed < target && !entries_vec.is_empty() {
             if let Some((key, entry)) = entries_vec.pop() {
                 freed += entry.size;
-                entries.remove(key);
+                keys_to_remove.push(key.clone());
             }
+        }
+
+        // Remove entries after collecting keys
+        for key in keys_to_remove {
+            entries.remove(&key);
         }
 
         *current = current.saturating_sub(freed);

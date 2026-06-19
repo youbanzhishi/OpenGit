@@ -12,6 +12,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
+use std::time::UNIX_EPOCH;
 use tracing::{error, info, warn};
 
 use crate::mirror::{MirrorError, MirrorPushResult, MirrorSeverity};
@@ -508,8 +509,9 @@ impl AlertDispatcher {
         // Add HMAC signature if secret configured
         if let Some(ref secret) = self.config.webhook_secret {
             use std::io::Write;
+            use hmac_sha256::HMAC;
 
-            let mut mac = hmac_sha256::HMAC::new(secret.as_bytes());
+            let mut mac = HMAC::new(secret.as_bytes());
             mac.update(json_str.as_bytes());
             let signature = hex::encode(mac.finalize());
 

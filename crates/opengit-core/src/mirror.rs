@@ -444,7 +444,7 @@ impl MirrorManager {
     }
 
     /// Push to all mirror targets
-    pub async fn push_to_mirrors(&self, ctx: &MirrorPushContext) -> Vec<MirrorPushResult> {
+    pub async fn push_to_mirrors(&self, ctx: &MirrorPushContext<'_>) -> Vec<MirrorPushResult> {
         let mut results = Vec::new();
         let targets = self.targets_for_repo(ctx.repo_name);
 
@@ -459,7 +459,7 @@ impl MirrorManager {
     /// Push to a single mirror target
     async fn push_to_target(
         &self,
-        ctx: &MirrorPushContext,
+        ctx: &MirrorPushContext<'_>,
         target: &MirrorTarget,
     ) -> MirrorPushResult {
         // 构建远程 URL (替换 {repo})

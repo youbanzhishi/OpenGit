@@ -88,4 +88,4 @@ pub use token_policy::{
     Consequence, Condition, PolicyRule, TokenLifecycleManager, TokenPolicy, TokenPolicyEngine,
     TokenRotation,
 };
-pub use webhook::{AlertConfig, AlertDispatcher as MirrorAlertDispatcher, AlertEntry as MirrorAlertEntry, AlertStore};
+pub use webhook::{AlertConfig, AlertDispatcher as MirrorAlertDispatcher, AlertStore, MirrorAlert};

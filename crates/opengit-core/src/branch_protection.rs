@@ -6,6 +6,9 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::pin::Pin;
+use std::future::Future;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::{error, info, warn};
 
@@ -189,10 +192,10 @@ pub trait CiProvider: Send + Sync {
     fn name(&self) -> &str;
     /// Check CI status for a repository and branch
     fn check_status(
-        &self,
-        repo: &str,
-        branch: &str,
-    ) -> impl std::future::Future<Output = Result<CiResult>> + Send;
+        self: Arc<Self>,
+        repo: String,
+        branch: String,
+    ) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>>;
 }
 
 /// GitHub Actions CI provider
@@ -290,9 +293,15 @@ impl CiProvider for GithubActionsProvider {
         "github-actions"
     }
 
-    async fn check_status(&self, repo: &str, branch: &str) -> Result<CiResult> {
-        let data = self.get_workflow_runs(repo, branch).await?;
-        Ok(self.parse_workflow_runs(&data))
+    fn check_status(
+        self: Arc<Self>,
+        repo: String,
+        branch: String,
+    ) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>> {
+        Box::pin(async move {
+            let data = self.get_workflow_runs(&repo, &branch).await?;
+            Ok(self.parse_workflow_runs(&data))
+        })
     }
 }
 
@@ -389,9 +398,15 @@ impl CiProvider for GitlabCiProvider {
         "gitlab-ci"
     }
 
-    async fn check_status(&self, repo: &str, branch: &str) -> Result<CiResult> {
-        let data = self.get_pipeline(repo, branch).await?;
-        Ok(self.parse_pipeline(&data))
+    fn check_status(
+        self: Arc<Self>,
+        repo: String,
+        branch: String,
+    ) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>> {
+        Box::pin(async move {
+            let data = self.get_pipeline(&repo, &branch).await?;
+            Ok(self.parse_pipeline(&data))
+        })
     }
 }
 
@@ -429,26 +444,20 @@ impl CiStatusChecker {
 
     /// Check CI status from all providers
     pub async fn check_all(&self, repo: &str, branch: &str) -> Vec<CiResult> {
+        use std::sync::Arc;
+
         let mut results = Vec::new();
 
         for provider in &self.providers {
-            match provider.check_status(repo, branch).await {
+            let name = provider.name().to_string();
+            let result = provider.check_status(Arc::clone(provider), repo.to_string(), branch.to_string()).await;
+            match result {
                 Ok(result) => {
-                    info!(
-                        "CI check from {}: {:?}",
-                        provider.name(),
-                        result.status
-                    );
+                    info!("CI check from {}: {:?}", name, result.status);
                     results.push(result);
                 }
                 Err(e) => {
-                    warn!(
-                        "CI check failed for {} on {}/{}: {}",
-                        provider.name(),
-                        repo,
-                        branch,
-                        e
-                    );
+                    warn!("CI check failed for {} on {}/{}: {}", name, repo, branch, e);
                 }
             }
         }
@@ -463,14 +472,9 @@ impl CiStatusChecker {
         branch: &str,
         timeout: Duration,
     ) -> Result<Vec<CiResult>> {
-        let handle = tokio::spawn(async move {
-            self.check_all(repo, branch).await;
-        });
-
-        tokio::time::timeout(timeout, handle)
+        tokio::time::timeout(timeout, self.check_all(repo, branch))
             .await
             .map_err(|_| anyhow::anyhow!("CI check timed out"))?
-            .map_err(|e| anyhow::anyhow!("Task join error: {}", e))
     }
 }
 

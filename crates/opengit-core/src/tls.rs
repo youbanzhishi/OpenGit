@@ -8,13 +8,14 @@
 //! - Security headers (HSTS, CSP, etc.)
 //! - Token encryption at rest
 
-use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::fs::File;
 use std::io::BufReader;
+use std::io::Error as IoError;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio_rustls::rustls::{Certificate, PrivateKey, ServerConfig};
 use tokio_rustls::TlsAcceptor;
 
 /// TLS configuration
@@ -116,9 +117,10 @@ impl TlsConfig {
 
 /// Generate self-signed certificate for development
 pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig> {
-    use rcgen::{BasicConstraints, CertParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose, SanType};
+    use rcgen::{BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose, SanType};
+    use rcgen::KeyPair as RcgenKeyPair;
 
-    let mut params = CertParams::default();
+    let mut params = CertificateParams::default();
     params.is_ca = BasicConstraints::Unconstrained;
     params.distinguished_name = DistinguishedName::new();
     params.distinguished_name.push(DnType::CommonName, "localhost");
