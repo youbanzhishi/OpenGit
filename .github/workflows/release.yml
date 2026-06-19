@@ -88,7 +88,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Set macOS deployment target
-        if: matrix.target contains 'apple-darwin'
+        if: matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-apple-darwin'
         run: |
           echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
 
