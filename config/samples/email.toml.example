@@ -1,0 +1,8 @@
+enabled = false
+smtp_host = "smtp.example.com"
+smtp_port = 587
+smtp_username = "your-email@example.com"
+smtp_password = "your-password"
+from = "OpenGit <notifications@example.com>"
+to = ["owner@example.com"]
+use_tls = true

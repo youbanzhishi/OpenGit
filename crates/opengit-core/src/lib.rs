@@ -17,6 +17,7 @@ pub mod ai_guard;
 pub mod audit;
 pub mod branch_protection;
 pub mod code_fingerprint;
+pub mod email_notifier;
 pub mod hook;
 pub mod identity;
 pub mod import;
@@ -46,6 +47,9 @@ pub use branch_protection::{
 pub use code_fingerprint::{
     CodeFingerprint, EvidenceItem, FingerprintConfig, FingerprintGenerator, FingerprintStore,
     IdentityMatch, TraceResult,
+};
+pub use email_notifier::{
+    EmailConfig, EmailNotifier, MirrorEmailEvent, MirrorTargetResult, PushEmailEvent,
 };
 pub use hook::{HookContext, HookPipeline, HookResult};
 pub use identity::{Identity, IdentityKind, Token};

@@ -2,6 +2,7 @@
 //!
 //! P4: Added SSH and plugin configuration.
 //! P5: Added mirror configuration.
+//! P8.2: Added email notification configuration.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -38,6 +39,9 @@ pub struct ServerConfig {
     /// Rate limit config file path
     #[serde(default = "default_rate_limit_file")]
     pub rate_limit_file: PathBuf,
+    /// Email notification config file path (P8.2)
+    #[serde(default = "default_email_file")]
+    pub email_file: PathBuf,
 }
 
 fn default_rate_limit_file() -> PathBuf {
@@ -58,6 +62,10 @@ fn default_plugin_file() -> PathBuf {
 
 fn default_mirror_file() -> PathBuf {
     PathBuf::from("config/mirrors.toml")
+}
+
+fn default_email_file() -> PathBuf {
+    PathBuf::from("config/email.toml")
 }
 
 impl ServerConfig {
@@ -100,6 +108,7 @@ impl ServerConfig {
             plugin_file: PathBuf::from("config/plugins.toml"),
             mirror_file: PathBuf::from("config/mirrors.toml"),
             rate_limit_file: PathBuf::from("config/rate-limit.toml"),
+            email_file: PathBuf::from("config/email.toml"),
         }
     }
 }

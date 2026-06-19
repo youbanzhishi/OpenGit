@@ -16,6 +16,7 @@ use axum::{
     Json, Router,
 };
 use opengit_core::{
+    email_notifier::EmailConfig,
     mirror::MirrorsFile,
     repository::{RefInfo, Repository},
     webhook::WebhookConfig,
@@ -39,6 +40,7 @@ pub fn build_web_ui_router() -> Router {
         .route("/repos/{name}", get(repo_detail_page))
         .route("/repos/{name}/automation", get(automation_page))
         .route("/repos/new", get(new_repo_page))
+        .route("/settings/email", get(email_settings_page))
         // API endpoints
         .route("/api/list", get(api_list_repos))
         .route("/api/repos", get(api_list_repos))
@@ -48,6 +50,9 @@ pub fn build_web_ui_router() -> Router {
         .route("/api/repos/{name}/hooks", get(api_get_hooks))
         .route("/api/repos/{name}/mirrors", get(api_get_mirrors))
         .route("/api/mirrors", get(api_list_mirrors))
+        // Email API
+        .route("/api/email/config", get(api_get_email_config))
+        .route("/api/email/config", post(api_update_email_config))
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -306,6 +311,38 @@ async fn api_get_mirrors(
 async fn api_list_mirrors(State(state): State<Arc<AppState>>) -> Json<MirrorsFile> {
     let mirrors = state.mirrors.read().await;
     Json(mirrors.clone())
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Email Settings API (P8.2)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// GET /settings/email — Email settings page
+async fn email_settings_page(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let notifier = state.email_notifier.read().await;
+    let enabled = notifier.is_enabled();
+    let html = EMAIL_SETTINGS_PAGE_HTML.replace("{{enabled}}", if enabled { "true" } else { "false" });
+    Html(html).into_response()
+}
+
+/// GET /api/email/config — Get email config
+async fn api_get_email_config(State(state): State<Arc<AppState>>) -> Json<EmailConfig> {
+    let notifier = state.email_notifier.read().await;
+    Json(notifier.config().clone())
+}
+
+/// POST /api/email/config — Update email config
+async fn api_update_email_config(
+    State(state): State<Arc<AppState>>,
+    Json(config): Json<EmailConfig>,
+) -> impl IntoResponse {
+    if let Err(e) = config.save(&state.config.email_file) {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response();
+    }
+    let notifier = opengit_core::email_notifier::EmailNotifier::new(config);
+    let mut current = state.email_notifier.write().await;
+    *current = notifier;
+    (StatusCode::OK, Json(serde_json::json!({"success": true}))).into_response()
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1458,5 +1495,161 @@ static ERROR_404_HTML: &str = r#"<!DOCTYPE html>
     <p class="error-desc">您访问的页面不存在或已被删除</p>
     <a href="/repos">← 返回仓库列表</a>
   </div>
+</body>
+</html>"#;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Email Settings Page HTML (P8.2)
+// ══════════════════════════════════════════════════════════════════════════════
+
+static EMAIL_SETTINGS_PAGE_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>邮件设置 - OpenGit</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --border: #30363d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --accent: #58a6ff;
+      --success: #3fb950;
+      --danger: #f85149;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, sans-serif; min-height: 100vh; }
+    .container { max-width: 700px; margin: 0 auto; padding: 2rem; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 0; border-bottom: 1px solid var(--border); margin-bottom: 2rem; }
+    .logo { font-size: 1.5rem; font-weight: 600; color: var(--accent); text-decoration: none; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    .subtitle { color: var(--text-secondary); margin-bottom: 2rem; }
+    .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; }
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem; }
+    input[type="text"], input[type="number"], input[type="password"] { width: 100%; padding: 0.75rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); }
+    input:focus { outline: none; border-color: var(--accent); }
+    .btn { padding: 0.75rem 1.5rem; border-radius: 6px; border: none; font-weight: 500; cursor: pointer; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: #4090e0; }
+    .btn-group { display: flex; gap: 1rem; margin-top: 1.5rem; }
+    .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); padding: 1rem 2rem; border-radius: 8px; opacity: 0; transition: opacity 0.3s; }
+    .toast.show { opacity: 1; }
+    .toast.success { background: var(--success); color: white; }
+    .toast.error { background: var(--danger); color: white; }
+    .status { display: inline-block; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.85rem; }
+    .status.enabled { background: rgba(63, 185, 80, 0.2); color: var(--success); }
+    .status.disabled { background: rgba(139, 148, 158, 0.2); color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a href="/" class="logo">OpenGit</a>
+    </header>
+    <h1>邮件通知设置</h1>
+    <p class="subtitle">配置推送和镜像同步的邮件通知</p>
+
+    <div class="card">
+      <div class="card-title">通知状态: <span id="status" class="status disabled">已禁用</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">SMTP 配置</div>
+      <div class="form-group">
+        <label>服务器</label>
+        <input type="text" id="smtpHost" placeholder="smtp.example.com">
+      </div>
+      <div class="form-group">
+        <label>端口</label>
+        <input type="number" id="smtpPort" value="587">
+      </div>
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="smtpUsername" placeholder="email@example.com">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="smtpPassword" placeholder="留空保留原密码">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">收件人</div>
+      <div class="form-group">
+        <label>发件地址</label>
+        <input type="text" id="from" placeholder="OpenGit <notifications@example.com>">
+      </div>
+      <div class="form-group">
+        <label>收件地址 (逗号分隔)</label>
+        <input type="text" id="to" placeholder="owner@example.com">
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveConfig()">保存</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    let enabled = {{enabled}};
+
+    async function loadConfig() {
+      const res = await fetch('/api/email/config');
+      const config = await res.json();
+      document.getElementById('smtpHost').value = config.smtp_host || '';
+      document.getElementById('smtpPort').value = config.smtp_port || 587;
+      document.getElementById('smtpUsername').value = config.smtp_username || '';
+      document.getElementById('from').value = config.from || '';
+      document.getElementById('to').value = (config.to || []).join(', ');
+      updateStatus(config.enabled);
+    }
+
+    function updateStatus(isEnabled) {
+      const el = document.getElementById('status');
+      el.textContent = isEnabled ? '已启用' : '已禁用';
+      el.className = 'status ' + (isEnabled ? 'enabled' : 'disabled');
+    }
+
+    async function saveConfig() {
+      const data = {
+        enabled: true,
+        smtp_host: document.getElementById('smtpHost').value,
+        smtp_port: parseInt(document.getElementById('smtpPort').value) || 587,
+        smtp_username: document.getElementById('smtpUsername').value,
+        smtp_password: document.getElementById('smtpPassword').value,
+        from: document.getElementById('from').value,
+        to: document.getElementById('to').value.split(',').map(s => s.trim()).filter(s => s),
+        use_tls: true
+      };
+      const res = await fetch('/api/email/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const result = await res.json();
+      showToast(res.ok ? '保存成功' : '保存失败: ' + (result.error || ''), res.ok ? 'success' : 'error');
+      if (res.ok) {
+        updateStatus(true);
+        document.getElementById('smtpPassword').value = '';
+      }
+    }
+
+    function showToast(msg, type) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = 'toast show ' + type;
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    loadConfig();
+  </script>
 </body>
 </html>"#;

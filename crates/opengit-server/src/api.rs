@@ -27,6 +27,7 @@ use crate::stats::ServerStats;
 use crate::webhook::WebhookConfig;
 use opengit_core::import::{GiteaMigrateConfig, ImportEngine, ImportRequest, ImportSource};
 use opengit_core::mirror::{MirrorTarget, MirrorsFile};
+use opengit_core::email_notifier::{EmailConfig, EmailNotifier};
 
 pub struct AppState {
     pub config: ServerConfig,
@@ -39,6 +40,8 @@ pub struct AppState {
     pub import_status: RwLock<Vec<ImportResultInfo>>,
     /// Rate limiter (P8.1)
     pub rate_limiter: Option<RateLimiter>,
+    /// Email notifier (P8.2)
+    pub email_notifier: RwLock<EmailNotifier>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -96,6 +99,15 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         None
     };
 
+    // P8.2: Initialize email notifier
+    let email_config = EmailConfig::load(&config.email_file)?;
+    let email_notifier = EmailNotifier::new(email_config);
+    if email_notifier.is_enabled() {
+        tracing::info!("Email notifications enabled: {}", config.email_file.display());
+    } else {
+        tracing::info!("Email notifications disabled (no config)");
+    }
+
     let state = Arc::new(AppState {
         config: config.clone(),
         policy_engine: RwLock::new(policy_engine),
@@ -106,6 +118,7 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         mirrors: RwLock::new(mirrors),
         import_status: RwLock::new(Vec::new()),
         rate_limiter,
+        email_notifier: RwLock::new(email_notifier),
     });
 
     // Smart HTTP routes — with optional auth middleware
