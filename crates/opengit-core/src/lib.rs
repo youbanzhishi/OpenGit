@@ -31,6 +31,7 @@ pub mod repository;
 pub mod security;
 pub mod tls;
 pub mod token_policy;
+pub mod group;
 pub mod webhook;
 
 pub use ai_audit::{
@@ -89,3 +90,4 @@ pub use token_policy::{
     TokenRotation,
 };
 pub use webhook::{AlertConfig, AlertDispatcher as MirrorAlertDispatcher, MirrorAlert, AlertStore};
+pub use group::{Group, GroupsFile, GroupMembership, Visibility};
