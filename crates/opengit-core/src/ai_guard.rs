@@ -255,9 +255,13 @@ impl AiGuard {
 
                         // 记录审计
                         self.audit_log.log(AuditEntry {
+                            id: uuid::Uuid::new_v4().to_string(),
                             timestamp: chrono::Utc::now().to_rfc3339(),
+                            operation: crate::audit::AuditOperation::Push,
                             repo: "N/A".to_string(),
-                            identity: "ai-guard".to_string(),
+                            branch: None,
+                            actor: Some("ai-guard".to_string()),
+                            identity: Some("ai-guard".to_string()),
                             action: format!("guard:{}", rule.id),
                             ref_name: None,
                             allowed: rule.action != "block",
