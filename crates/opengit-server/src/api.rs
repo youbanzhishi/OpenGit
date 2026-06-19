@@ -12,6 +12,7 @@ use axum::{
 };
 use opengit_core::{
     audit::AuditLog,
+    group::{Group, GroupsFile, GroupMembership, Visibility},
     identity::{Identity, IdentityStore},
     policy::{Action, EvalResult, Policy, PolicyEngine, PolicyRule},
     rate_limiter::RateLimiter,
@@ -42,6 +43,10 @@ pub struct AppState {
     pub rate_limiter: Option<RateLimiter>,
     /// Email notifier (P8.2)
     pub email_notifier: RwLock<EmailNotifier>,
+    /// Repository groups
+    pub groups: RwLock<GroupsFile>,
+    /// Group membership
+    pub group_membership: RwLock<GroupMembership>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -118,6 +123,8 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         mirrors: RwLock::new(mirrors),
         import_status: RwLock::new(Vec::new()),
         rate_limiter,
+        groups: RwLock::new(groups),
+        group_membership: RwLock::new(group_membership),
         email_notifier: RwLock::new(email_notifier),
     });
 
@@ -148,6 +155,14 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         .route("/repos/{name}/size", get(get_repo_size))
         .route("/repos/bulk/create", post(bulk_create_repos))
         .route("/policy/eval", post(eval_policy))
+        // Groups (P9)
+        .route("/groups", get(list_groups).post(create_group))
+        .route("/groups/{id}", get(get_group).put(update_group).delete(delete_group))
+        .route("/groups/{id}/children", get(list_group_children))
+        .route("/groups/{id}/repos", get(list_group_repos))
+        .route("/groups/{id}/repos/{repo}", post(add_repo_to_group).delete(remove_repo_from_group))
+        .route("/groups/search", get(search_groups))
+        .route("/groups/root", get(list_root_groups))
         .route(
             "/policy/rules",
             get(list_policy_rules).post(add_policy_rule),
@@ -1393,4 +1408,307 @@ async fn import_status(
 ) -> Json<Vec<ImportResultInfo>> {
     let status = state.import_status.read().await;
     Json(status.clone())
+}
+
+
+// ============================================================================
+// Group Handlers (P9)
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateGroupRequest {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    #[serde(default)]
+    pub visibility: Visibility,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateGroupRequest {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub visibility: Option<Visibility>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+}
+
+async fn list_groups(
+    State(state): State<SharedState>,
+) -> Json<Vec<Group>> {
+    let groups = state.groups.read().await;
+    Json(groups.list().into_iter().cloned().collect())
+}
+
+async fn create_group(
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+    Json(req): Json<CreateGroupRequest>,
+) -> Result<Json<Group>, StatusCode> {
+    // Only admins can create groups
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    let mut groups = state.groups.write().await;
+    match groups.create_with_details(
+        &req.name,
+        req.description,
+        req.parent_id,
+        req.visibility,
+        req.tags,
+    ) {
+        Ok(group) => {
+            // Save to file
+            if let Err(e) = groups.save(&state.config.group_file) {
+                tracing::warn!("Failed to save groups: {}", e);
+            }
+            tracing::info!("Group created: {} by {}", group.name, caller.0);
+            Ok(Json(group))
+        }
+        Err(e) => {
+            tracing::warn!("Failed to create group: {}", e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
+}
+
+async fn get_group(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> Result<Json<Group>, StatusCode> {
+    let groups = state.groups.read().await;
+    // Try by ID first, then by slug
+    match groups.get(&id).or_else(|| groups.get_by_slug(&id)) {
+        Some(group) => Ok(Json(group.clone())),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn update_group(
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+    Path(id): Path<String>,
+    Json(req): Json<UpdateGroupRequest>,
+) -> Result<Json<Group>, StatusCode> {
+    // Only admins can update groups
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    let mut groups = state.groups.write().await;
+    
+    // Try by ID first, then by slug
+    let group_id = groups.get(&id)
+        .or_else(|| groups.get_by_slug(&id))
+        .map(|g| g.id.clone());
+    
+    let group_id = match group_id {
+        Some(id) => id,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+
+    // Update fields
+    if let Some(tags) = req.tags {
+        if let Some(group) = groups.get_mut(&group_id) {
+            group.tags = tags;
+            group.touch();
+        }
+    }
+
+    match groups.update(
+        &group_id,
+        req.name.as_deref(),
+        req.description,
+        req.visibility,
+    ) {
+        Ok(Some(group)) => {
+            if let Err(e) = groups.save(&state.config.group_file) {
+                tracing::warn!("Failed to save groups: {}", e);
+            }
+            tracing::info!("Group updated: {} by {}", group.name, caller.0);
+            Ok(Json(group.clone()))
+        }
+        _ => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn delete_group(
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, StatusCode> {
+    // Only admins can delete groups
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    let mut groups = state.groups.write().await;
+    
+    // Find group ID (by ID or slug)
+    let group_id = groups.get(&id)
+        .or_else(|| groups.get_by_slug(&id))
+        .map(|g| g.id.clone());
+    
+    let group_id = match group_id {
+        Some(id) => id,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+
+    match groups.delete(&group_id) {
+        Ok(true) => {
+            if let Err(e) = groups.save(&state.config.group_file) {
+                tracing::warn!("Failed to save groups: {}", e);
+            }
+            tracing::info!("Group deleted: {} by {}", id, caller.0);
+            Ok(StatusCode::NO_CONTENT)
+        }
+        Ok(false) => Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::warn!("Failed to delete group: {}", e);
+            Err(StatusCode::CONFLICT) // Conflict if has children
+        }
+    }
+}
+
+async fn list_group_children(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<Group>>, StatusCode> {
+    let groups = state.groups.read().await;
+    
+    // Find group ID
+    let group_id = groups.get(&id)
+        .or_else(|| groups.get_by_slug(&id))
+        .map(|g| g.id.clone());
+    
+    let group_id = match group_id {
+        Some(id) => id,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+
+    Ok(Json(groups.children(&group_id).into_iter().cloned().collect()))
+}
+
+async fn list_group_repos(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<String>>, StatusCode> {
+    let membership = state.group_membership.read().await;
+    
+    // Find group ID
+    let groups = state.groups.read().await;
+    let group_id = groups.get(&id)
+        .or_else(|| groups.get_by_slug(&id))
+        .map(|g| g.id.clone());
+    
+    let group_id = match group_id {
+        Some(id) => id,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+
+    Ok(Json(membership.get_repos(&group_id).into_iter().map(String::from).collect()))
+}
+
+async fn add_repo_to_group(
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+    Path((group_id, repo_name)): Path<(String, String)>,
+) -> Result<StatusCode, StatusCode> {
+    // Only admins can modify membership
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    // Verify group exists
+    {
+        let groups = state.groups.read().await;
+        if groups.get(&group_id).is_none() {
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
+
+    let mut membership = state.group_membership.write().await;
+    membership.add_repo(&group_id, &repo_name);
+    
+    if let Err(e) = membership.save(&state.config.group_membership_file) {
+        tracing::warn!("Failed to save membership: {}", e);
+    }
+    
+    tracing::info!("Repo {} added to group {} by {}", repo_name, group_id, caller.0);
+    Ok(StatusCode::CREATED)
+}
+
+async fn remove_repo_from_group(
+    State(state): State<SharedState>,
+    Extension(caller): Extension<IdentityName>,
+    Path((group_id, repo_name)): Path<(String, String)>,
+) -> Result<StatusCode, StatusCode> {
+    // Only admins can modify membership
+    {
+        let engine = state.policy_engine.read().await;
+        let result = engine.evaluate("*", &caller.0, Action::Admin);
+        if !result.is_allowed() {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    let mut membership = state.group_membership.write().await;
+    membership.remove_repo(&group_id, &repo_name);
+    
+    if let Err(e) = membership.save(&state.config.group_membership_file) {
+        tracing::warn!("Failed to save membership: {}", e);
+    }
+    
+    tracing::info!("Repo {} removed from group {} by {}", repo_name, group_id, caller.0);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn search_groups(
+    State(state): State<SharedState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<Vec<Group>> {
+    let groups = state.groups.read().await;
+    let query = params.get("q").map(|s| s.as_str()).unwrap_or("");
+    let tag = params.get("tag");
+    
+    let results = if let Some(tag) = tag {
+        groups.list_by_tag(tag)
+    } else if !query.is_empty() {
+        groups.search(query)
+    } else {
+        groups.list()
+    };
+    
+    Json(results.into_iter().cloned().collect())
+}
+
+async fn list_root_groups(
+    State(state): State<SharedState>,
+) -> Json<Vec<Group>> {
+    let groups = state.groups.read().await;
+    Json(groups.root_groups().into_iter().cloned().collect())
 }
