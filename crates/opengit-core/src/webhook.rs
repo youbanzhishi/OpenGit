@@ -558,13 +558,14 @@ fn rand_simple() -> u64 {
 
     let state = RandomState::new();
     let mut hasher = state.build_hasher();
-    hasher.write_u128(
+    hasher.write_u64(
         std::time::SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_nanos(),
+            .as_secs(),
     );
-    hasher.write_u128(rand_simple as u128)
+    hasher.write_u64(rand_simple);
+    hasher.finish()
 }
 
 fn chrono_lite_now() -> String {
