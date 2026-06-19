@@ -38,3 +38,22 @@ tokio-util = { version = "0.7", features = ["io"] }
 base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 clap = { version = "4", features = ["derive", "env"] }
+
+# Locked versions for compatibility with Rust 1.85
+[workspace.dependencies.rustls]
+version = "=0.23.20"
+
+[workspace.dependencies.tokio-rustls]
+version = "=0.26.0"
+
+[workspace.dependencies.rustls-pemfile]
+version = "=2.2.0"
+
+[workspace.dependencies.rcgen]
+version = "=0.13.2"
+
+[workspace.dependencies.hmac-sha256]
+version = "=1.1.14"
+
+[workspace.dependencies.rand]
+version = "=0.8.5"
