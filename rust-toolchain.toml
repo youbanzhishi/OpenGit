@@ -1,1 +1,2 @@
-[profile]\ntoolchain = "1.85.0"\n
+[toolchain]
+channel = "1.85.0"
