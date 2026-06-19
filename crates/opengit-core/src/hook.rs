@@ -162,20 +162,24 @@ impl HookPipeline {
 
             // Audit log entry
             self.audit_log.log(AuditEntry {
+                id: uuid::Uuid::new_v4().to_string(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
+                operation: crate::audit::AuditOperation::Push,
                 repo: ctx.repo.clone(),
-                identity: ctx.identity.clone(),
-                action: format!("{:?}", result.action),
+                branch: None,
+                actor: None,
+                identity: Some(ctx.identity.clone()),
+                action: Some(format!("{:?}", result.action)),
                 ref_name: Some(update.ref_name.clone()),
-                allowed,
-                reason: result.reason.clone(),
+                allowed: Some(allowed),
+                reason: Some(result.reason.clone()),
             });
 
             ref_results.push(RefResult {
                 ref_name: update.ref_name.clone(),
                 action: result.action,
-                allowed,
-                reason: result.reason.clone(),
+                allowed: Some(allowed),
+                reason: Some(result.reason.clone()),
             });
         }
 
@@ -219,8 +223,8 @@ impl HookPipeline {
             ref_results: vec![RefResult {
                 ref_name: update.ref_name.clone(),
                 action: result.action,
-                allowed,
-                reason: result.reason.clone(),
+                allowed: Some(allowed),
+                reason: Some(result.reason.clone()),
             }],
             message: if allowed {
                 "Allowed".into()
