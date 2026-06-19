@@ -124,7 +124,7 @@ pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig
     params.distinguished_name = DistinguishedName::new();
     params.distinguished_name.push(DnType::CommonName, "localhost");
 
-    let cert = rcgen::Certificate::from_params(params)
+    let cert = rcgen::CertificateParams::from(params)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
     let key_pair = cert.get_key_pair();
