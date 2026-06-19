@@ -18,6 +18,27 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 
+//! TLS/HTTPS support for OpenGit
+//!
+//! P11: Security hardening - HTTPS, token encryption, security headers
+//!
+//! Features:
+//! - HTTPS server support
+//! - TLS certificate management
+//! - Security headers (HSTS, CSP, etc.)
+//! - Token encryption at rest
+
+use rustls_pemfile::{certs, pkcs8_private_keys};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::{ServerConfig, CipherSuite, TlsVersion as RustlsVersion};
+use std::io::Error as IoError;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::Path;
+use std::sync::Arc;
+use tokio::net::TcpListener;
+use tokio_rustls::TlsAcceptor;
+
 /// TLS configuration
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TlsConfig {
@@ -69,6 +90,43 @@ impl TlsConfig {
         let config: TlsConfig = toml::from_str(&content)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         Ok(config)
+    }
+
+    /// Create RustTLS server config
+    pub fn into_server_config(self) -> std::io::Result<ServerConfig> {
+        let cert_file = File::open(&self.cert_file)?;
+        let key_file = File::open(&self.key_file)?;
+
+        let certs = certs(&mut BufReader::new(cert_file))
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
+            .into_iter()
+            .map(CertificateDer::from)
+            .collect::<Vec<_>>();
+
+        let keys = pkcs8_private_keys(&mut BufReader::new(key_file))
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
+            .into_iter()
+            .map(PrivateKeyDer::from)
+            .collect::<Vec<_>>();
+
+        let key = keys.into_iter().next()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No private key found"))?;
+
+        let mut config = ServerConfig::builder()
+            .with_safe_defaults()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+        // Configure ALPN
+        if self.http2 {
+            config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        }
+
+        Ok(config)
+    }
+}
+
     }
 
     /// Create RustTLS server config
