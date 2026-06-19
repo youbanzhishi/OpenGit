@@ -4,7 +4,7 @@
 //! Learns user behavior baselines and detects anomalies.
 
 use crate::audit::AuditEntry;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
