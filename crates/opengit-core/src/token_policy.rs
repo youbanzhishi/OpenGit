@@ -238,7 +238,7 @@ impl Condition {
                 // Would be set by AI audit system
                 recent_actions
                     .iter()
-                    .any(|e| e.details.to_string().contains("suspicious"))
+                    .any(|e| format!("{:?}", e.details).contains("suspicious"))
             }
             Condition::Idle { days } => {
                 if let Some(last_action) = recent_actions.first() {
