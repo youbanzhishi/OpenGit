@@ -9,7 +9,7 @@
 //! - Token encryption at rest
 
 use rustls_pemfile::{certs, pkcs8_private_keys};
-use tokio_rustls::rustls::{Certificate, PrivateKey, ServerConfig};
+// use tokio_rustls::rustls::{Certificate (deprecated), PrivateKey, ServerConfig};
 use std::io::Error as IoError;
 use std::fs::File;
 use std::io::BufReader;
@@ -117,7 +117,8 @@ impl TlsConfig {
 
 /// Generate self-signed certificate for development
 pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig> {
-    use rcgen::{BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose, SanType};
+    use rustls::pki_types::{CertificateDer, PrivateKeyDer, IpAddr, DnsName, ServerName};
+use rcgen::{BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose, SanType};
 
     let mut params = CertificateParams::default();
     params.is_ca = BasicConstraints::Unconstrained;
