@@ -564,7 +564,7 @@ fn rand_simple() -> u64 {
             .unwrap()
             .as_secs(),
     );
-    hasher.write_u64(rand_simple);
+    hasher.write_u64(rand_simple());
     hasher.finish()
 }
 

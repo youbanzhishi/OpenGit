@@ -477,15 +477,12 @@ impl TokenRotation {
              ======================\n\
              Identity: {}\n\
              Old Token: {}\n\
-             New Token: {}\n\
-             Reason: {}\n\
-             Time: {}",
+             New Token: {}...\n            Reason: {}",
             self.identity,
             self.identity,
             self.old_token_label.as_deref().unwrap_or("(new)"),
-            &self.new_token[..20.min(self.new_token.len())] + "...",
+            &self.new_token[..20.min(self.new_token.len())],
             self.reason,
-            self.timestamp
         )
     }
 }
@@ -509,14 +506,16 @@ fn rand_bytes() -> [u8; 16] {
     use std::hash::{BuildHasher, Hasher};
     let state = RandomState::new();
     let mut hasher = state.build_hasher();
-    hasher.write_u128(
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-    );
-    let hash = hasher.finish();
-    hash.to_le_bytes()
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    hasher.write_u128(now);
+    let hash = hasher.finish() as u128;
+    let mut result = [0u8; 16];
+    result[..8].copy_from_slice(&hash.to_le_bytes());
+    result[8..].copy_from_slice(&(hash >> 64).to_le_bytes());
+    result
 }
 
 fn parse_timestamp(ts: &str) -> Option<SystemTime> {
