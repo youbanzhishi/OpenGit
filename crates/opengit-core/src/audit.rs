@@ -26,6 +26,16 @@ pub struct AuditEntry {
     pub branch: Option<String>,
     /// Actor (user/service) who triggered
     pub actor: Option<String>,
+    /// Identity (extended field)
+    pub identity: Option<String>,
+    /// Action description (extended field)
+    pub action: Option<String>,
+    /// Ref name (extended field)
+    pub ref_name: Option<String>,
+    /// Whether operation was allowed
+    pub allowed: Option<bool>,
+    /// Reason for decision
+    pub reason: Option<String>,
     /// Details
     pub details: AuditDetails,
 }
