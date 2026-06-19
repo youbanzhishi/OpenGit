@@ -257,7 +257,7 @@ impl AiGuard {
                         self.audit_log.log(AuditEntry {
                             id: uuid::Uuid::new_v4().to_string(),
                             timestamp: chrono::Utc::now().to_rfc3339(),
-                            operation: crate::audit::AuditOperation::Push,
+                            operation: crate::audit::AuditOperation::MirrorPush,
                             repo: "N/A".to_string(),
                             branch: None,
                             actor: Some("ai-guard".to_string()),
