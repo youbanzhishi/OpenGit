@@ -228,7 +228,7 @@ impl MirrorManager {
     }
 
     /// Validate push safety before mirroring
-    pub fn validate_push(&self, ctx: &MirrorPushContext) -> Result<Vec<MirrorError>> {
+    pub fn validate_push(&self, ctx: &MirrorPushContext<'_>) -> Result<Vec<MirrorError>> {
         let mut errors = Vec::new();
 
         // 1. Check for empty/deletion
@@ -255,7 +255,7 @@ impl MirrorManager {
     }
 
     /// Check: not pushing to empty repo or deletion
-    fn check_not_empty(&self, ctx: &MirrorPushContext) -> Option<MirrorError> {
+    fn check_not_empty(&self, ctx: &MirrorPushContext<'_>) -> Option<MirrorError> {
         // 检测删除操作
         if ctx.new_sha == NULL_SHA {
             if !self.security.allow_branch_delete {
@@ -289,7 +289,7 @@ impl MirrorManager {
     }
 
     /// Check: not force pushing
-    fn check_not_force_push(&self, ctx: &MirrorPushContext) -> Option<MirrorError> {
+    fn check_not_force_push(&self, ctx: &MirrorPushContext<'_>) -> Option<MirrorError> {
         // 跳过新建分支
         if ctx.old_sha == NULL_SHA {
             return None;
@@ -318,7 +318,7 @@ impl MirrorManager {
     }
 
     /// Check: branch protection rules
-    fn check_branch_protection(&self, ctx: &MirrorPushContext) -> Option<MirrorError> {
+    fn check_branch_protection(&self, ctx: &MirrorPushContext<'_>) -> Option<MirrorError> {
         // 检查是否受保护分支
         let is_protected = self.security.protected_branches.iter().any(|pattern| {
             if pattern.ends_with("/*") {
@@ -347,7 +347,7 @@ impl MirrorManager {
     }
 
     /// Check: delete ratio (大量删除检测)
-    fn check_delete_ratio(&self, ctx: &MirrorPushContext) -> Option<MirrorError> {
+    fn check_delete_ratio(&self, ctx: &MirrorPushContext<'_>) -> Option<MirrorError> {
         if ctx.old_sha == NULL_SHA || ctx.new_sha == NULL_SHA {
             return None;
         }
@@ -384,7 +384,7 @@ impl MirrorManager {
     }
 
     /// Check if repo has commits
-    fn has_commits(&self, ctx: &MirrorPushContext) -> bool {
+    fn has_commits(&self, ctx: &MirrorPushContext<'_>) -> bool {
         let repo_path = ctx.repos_dir.join(format!("{}.git", ctx.repo_name));
         let output = Command::new("git")
             .args(&["rev-list", "--count", ctx.new_sha])
@@ -402,7 +402,7 @@ impl MirrorManager {
     }
 
     /// Get diff statistics between old and new SHA
-    fn get_diff_stats(&self, ctx: &MirrorPushContext) -> Option<DiffStats> {
+    fn get_diff_stats(&self, ctx: &MirrorPushContext<'_>) -> Option<DiffStats> {
         let repo_path = ctx.repos_dir.join(format!("{}.git", ctx.repo_name));
         let output = Command::new("git")
             .args(&[
@@ -444,7 +444,7 @@ impl MirrorManager {
     }
 
     /// Push to all mirror targets
-    pub async fn push_to_mirrors(&self, ctx: &MirrorPushContext) -> Vec<MirrorPushResult> {
+    pub async fn push_to_mirrors(&self, ctx: &MirrorPushContext<'_>) -> Vec<MirrorPushResult> {
         let mut results = Vec::new();
         let targets = self.targets_for_repo(ctx.repo_name);
 
