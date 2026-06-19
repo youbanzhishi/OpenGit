@@ -17,6 +17,7 @@ use axum::{
 };
 use opengit_core::{
     email_notifier::EmailConfig,
+    file_append::{append_file, file_exists, list_files, AppendFileRequest},
     mirror::MirrorsFile,
     repository::{RefInfo, Repository},
     webhook::WebhookConfig,
@@ -53,6 +54,10 @@ pub fn build_web_ui_router() -> Router {
         // Email API
         .route("/api/email/config", get(api_get_email_config))
         .route("/api/email/config", post(api_update_email_config))
+        // File Append API (P8.3)
+        .route("/api/repos/{name}/files", get(api_list_files))
+        .route("/api/repos/{name}/files/exists", get(api_check_file_exists))
+        .route("/api/repos/{name}/append", post(api_append_file))
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -343,6 +348,95 @@ async fn api_update_email_config(
     let mut current = state.email_notifier.write().await;
     *current = notifier;
     (StatusCode::OK, Json(serde_json::json!({"success": true}))).into_response()
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// File Append API (P8.3)
+// ══════════════════════════════════════════════════════════════════════════════
+
+use serde::Deserialize;
+
+/// Query params for file operations
+#[derive(Debug, Deserialize)]
+pub struct FileQuery {
+    pub path: Option<String>,
+    pub branch: Option<String>,
+}
+
+/// GET /api/repos/{name}/files - List files in repository
+async fn api_list_files(
+    Path(name): Path<String>,
+    Query(params): Query<FileQuery>,
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let repo_path = state.config.repos_dir.join(&name);
+    if !repo_path.exists() {
+        return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Repository not found"}))).into_response();
+    }
+
+    let branch = params.branch.unwrap_or_else(|| "main".to_string());
+    let dir = params.path.as_deref();
+
+    match list_files(&repo_path, &branch, dir) {
+        Ok(files) => Json(serde_json::json!({"files": files, "branch": branch})).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// GET /api/repos/{name}/files/exists - Check if file exists
+async fn api_check_file_exists(
+    Path(name): Path<String>,
+    Query(params): Query<FileQuery>,
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let repo_path = state.config.repos_dir.join(&name);
+    if !repo_path.exists() {
+        return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Repository not found"}))).into_response();
+    }
+
+    let path = match &params.path {
+        Some(p) => p.clone(),
+        None => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "path parameter required"}))).into_response(),
+    };
+
+    let branch = params.branch.unwrap_or_else(|| "main".to_string());
+
+    match file_exists(&repo_path, &branch, &path) {
+        Ok(exists) => Json(serde_json::json!({"exists": exists, "path": path, "branch": branch})).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// POST /api/repos/{name}/append - Append a new file (P8.3)
+async fn api_append_file(
+    Path(name): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AppendFileRequest>,
+) -> impl IntoResponse {
+    let repo_path = state.config.repos_dir.join(&name);
+    if !repo_path.exists() {
+        return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Repository not found"}))).into_response();
+    }
+
+    // Default branch
+    let branch = "main";
+
+    match append_file(&repo_path, branch, &request) {
+        Ok(result) => {
+            tracing::info!("File appended: {} in repo {}", request.path, name);
+            Json(serde_json::json!({
+                "success": true,
+                "sha": result.sha,
+                "commit_id": result.commit_id,
+                "path": result.path,
+                "message": result.message
+            })).into_response()
+        }
+        Err(e) => {
+            tracing::warn!("Failed to append file: {}", e);
+            (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e.to_string()}))).into_response()
+        }
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

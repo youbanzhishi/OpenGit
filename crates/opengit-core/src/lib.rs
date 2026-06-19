@@ -18,6 +18,7 @@ pub mod audit;
 pub mod branch_protection;
 pub mod code_fingerprint;
 pub mod email_notifier;
+pub mod file_append;
 pub mod hook;
 pub mod identity;
 pub mod import;
@@ -50,6 +51,9 @@ pub use code_fingerprint::{
 };
 pub use email_notifier::{
     EmailConfig, EmailNotifier, MirrorEmailEvent, MirrorTargetResult, PushEmailEvent,
+};
+pub use file_append::{
+    append_file, file_exists, list_files, AppendFileRequest, AppendFileResponse, AuthorInfo,
 };
 pub use hook::{HookContext, HookPipeline, HookResult};
 pub use identity::{Identity, IdentityKind, Token};
