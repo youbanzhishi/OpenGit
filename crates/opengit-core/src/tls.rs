@@ -10,7 +10,7 @@
 
 use rand::RngCore;
 use rcgen::{BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose, SanType};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, IpAddr, ServerName};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use rustls::{ServerConfig, crypto::ring::default_provider};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::fs::File;
@@ -124,26 +124,27 @@ pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig
     params.key_usages = vec![KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::KeyEncipherment];
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
     
-    let dns_name = rustls::pki_types::DnsName::try_from("localhost")
+    let dns_name = rcgen::Ia5String::try_from("localhost")
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    let ip_addr = IpAddr::from(StdIpAddr::from([127, 0, 0, 1]));
+    let ip_addr: StdIpAddr = [127, 0, 0, 1].into();
     
     params.subject_alt_names = vec![
         SanType::DnsName(dns_name),
         SanType::IpAddress(ip_addr),
     ];
 
-    let cert = rcgen::Certificate::from_params(params)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.into()))?;
-
-    let key_pair = cert.get_key_pair();
+    // Generate a key pair for self-signed certificate
+    let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    
+    let cert = params.self_signed(&key_pair)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
     // Generate private key
-    let private_key_pem = cert.serialize_private_key_pem();
+    let private_key_pem = key_pair.serialize_pem();
 
     // Generate certificate
-    let cert_pem = cert.serialize_pem()
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let cert_pem = cert.pem();
 
     // Write files
     std::fs::create_dir_all(output_dir)?;
