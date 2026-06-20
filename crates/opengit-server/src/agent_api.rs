@@ -82,7 +82,7 @@ pub struct AgentCapabilities {
 
 /// Agent auth middleware — validates agent token
 async fn agent_auth_middleware(
-    axum::extract::Request,
+    request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     next.run(request).await
