@@ -198,11 +198,6 @@ pub trait CiProvider: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>>;
 }
 
-/// Wrapper to call check_status on a dyn CiProvider
-fn call_check_status(provider: Arc<dyn CiProvider>, repo: String, branch: String) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>> {
-    provider.check_status(repo, branch)
-}
-
 /// GitHub Actions CI provider
 pub struct GithubActionsProvider {
     client: reqwest::Client,
@@ -418,7 +413,7 @@ impl CiProvider for GitlabCiProvider {
 /// CI status checker that aggregates multiple providers
 pub struct CiStatusChecker {
     client: reqwest::Client,
-    providers: Vec<Box<dyn CiProvider>>,
+    providers: Vec<Arc<dyn CiProvider>>,
 }
 
 impl CiStatusChecker {
@@ -430,39 +425,28 @@ impl CiStatusChecker {
     }
 
     /// Add a GitHub Actions provider
-    pub fn with_github(mut self, token: String) -> Self {
-        self.providers.push(Box::new(GithubActionsProvider::new(token)));
-        self
+    pub fn with_github(self, token: String) -> Self {
+        self.with_provider(Arc::new(GithubActionsProvider::new(token)))
     }
 
     /// Add a GitLab CI provider
-    pub fn with_gitlab(mut self, token: String) -> Self {
-        self.providers.push(Box::new(GitlabCiProvider::new(token)));
-        self
+    pub fn with_gitlab(self, token: String) -> Self {
+        self.with_provider(Arc::new(GitlabCiProvider::new(token)))
     }
 
     /// Add a custom provider
-    pub fn with_provider(mut self, provider: Box<dyn CiProvider>) -> Self {
+    pub fn with_provider(mut self, provider: Arc<dyn CiProvider>) -> Self {
         self.providers.push(provider);
         self
     }
 
     /// Check CI status from all providers
     pub async fn check_all(&self, repo: &str, branch: &str) -> Vec<CiResult> {
-        use std::sync::Arc;
-
         let mut results = Vec::new();
 
         for provider in &self.providers {
             let name = provider.name().to_string();
-            // Convert &Box<dyn CiProvider> to Arc<dyn CiProvider>
-            let provider_arc: Arc<dyn CiProvider> = unsafe {
-                // Box<T> has the same memory layout as *mut T for our purposes
-                let boxed_ptr: *const Box<dyn CiProvider> = provider;
-                let inner_ptr = *boxed_ptr as *mut (dyn CiProvider + Send + Sync);
-                Arc::from_raw(inner_ptr)
-            };
-            let result = provider_arc.check_status(repo.to_string(), branch.to_string()).await;
+            let result = provider.check_status(repo.to_string(), branch.to_string()).await;
             match result {
                 Ok(result) => {
                     info!(
