@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{error, info, warn};
+use tracing;
 
 /// Code fingerprint for a commit or diff
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -344,7 +344,7 @@ impl FingerprintStore {
         Ok(Self {
             path: path.to_path_buf(),
             fingerprints,
-            evidence: data.evidence,
+            evidence: HashMap::new(), // data.evidence needs to be keyed by something
         })
     }
 
@@ -554,7 +554,7 @@ mod tests {
             "abc123def456",
             "agent-deploy",
             "Fix critical bug",
-            &["src/main.rs", "src/lib.rs"],
+            &["src/main.rs".to_string(), "src/lib.rs".to_string()],
             10,
             2,
             "2026-06-17T10:00:00Z",
@@ -686,7 +686,7 @@ mod tests {
             "abc123",
             "agent",
             "Test commit",
-            &["file.rs"],
+            &["file.rs".to_string()],
             5,
             1,
             "2026-06-17T10:00:00Z",
