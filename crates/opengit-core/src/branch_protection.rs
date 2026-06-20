@@ -198,6 +198,17 @@ pub trait CiProvider: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>>;
 }
 
+/// Wrapper to call check_status on Arc<dyn CiProvider>
+fn call_check_status(provider: Arc<dyn CiProvider>, repo: String, branch: String) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>> {
+    // Use the concrete type's check_status
+    // We need to downcast to call the method
+    call_provider_check_status(&*provider, provider, repo, branch)
+}
+
+fn call_provider_check_status<T: CiProvider + ?Sized>(p: &T, arc: Arc<T>, repo: String, branch: String) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>> {
+    p.check_status(arc, repo, branch)
+}
+
 /// GitHub Actions CI provider
 pub struct GithubActionsProvider {
     client: reqwest::Client,
@@ -446,7 +457,7 @@ impl CiStatusChecker {
 
         for provider in &self.providers {
             let name = provider.name().to_string();
-            let result = (&**provider as &dyn CiProvider).check_status(Arc::clone(provider), repo.to_string(), branch.to_string()).await;
+            let result = call_check_status(Arc::clone(provider), repo.to_string(), branch.to_string()).await;
             match result {
                 Ok(result) => {
                     info!(
