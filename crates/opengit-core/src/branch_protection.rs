@@ -198,6 +198,11 @@ pub trait CiProvider: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>>;
 }
 
+/// Wrapper to call check_status on a dyn CiProvider
+fn call_check_status(provider: Arc<dyn CiProvider>, repo: String, branch: String) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>> {
+    provider.check_status(repo, branch)
+}
+
 /// GitHub Actions CI provider
 pub struct GithubActionsProvider {
     client: reqwest::Client,
@@ -450,11 +455,12 @@ impl CiStatusChecker {
 
         for provider in &self.providers {
             let name = provider.name().to_string();
-            // Create Arc from Box by converting pointer representation
-            let provider_arc = unsafe {
-                let boxed: *const Box<dyn CiProvider> = provider;
-                let ptr = (*boxed) as *const dyn CiProvider as *const Arc<dyn CiProvider>;
-                Arc::from_raw(ptr)
+            // Convert &Box<dyn CiProvider> to Arc<dyn CiProvider>
+            let provider_arc: Arc<dyn CiProvider> = unsafe {
+                // Box<T> has the same memory layout as *mut T for our purposes
+                let boxed_ptr: *const Box<dyn CiProvider> = provider;
+                let inner_ptr = *boxed_ptr as *mut (dyn CiProvider + Send + Sync);
+                Arc::from_raw(inner_ptr)
             };
             let result = provider_arc.check_status(repo.to_string(), branch.to_string()).await;
             match result {
