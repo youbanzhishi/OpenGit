@@ -200,13 +200,9 @@ pub trait CiProvider: Send + Sync {
 
 /// Wrapper to call check_status on Arc<dyn CiProvider>
 fn call_check_status(provider: Arc<dyn CiProvider>, repo: String, branch: String) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>> {
-    // Use the concrete type's check_status
-    // We need to downcast to call the method
-    call_provider_check_status(&*provider, provider, repo, branch)
-}
-
-fn call_provider_check_status<T: CiProvider + ?Sized>(p: &T, arc: Arc<T>, repo: String, branch: String) -> Pin<Box<dyn Future<Output = Result<CiResult>> + Send>> {
-    p.check_status(arc, repo, branch)
+    // Clone the Arc to satisfy the 'self: Arc<Self>' receiver requirement
+    let provider2 = provider.clone();
+    provider.check_status(repo, branch)
 }
 
 /// GitHub Actions CI provider
