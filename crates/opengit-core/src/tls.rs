@@ -85,6 +85,7 @@ impl TlsConfig {
         }
         let keys_data: Vec<PrivateKeyDer<'static>> = pkcs8_private_keys(&mut BufReader::new(key_file))
             .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("pkcs8 error: {}", e))
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         let key = keys_data.into_iter().next()
