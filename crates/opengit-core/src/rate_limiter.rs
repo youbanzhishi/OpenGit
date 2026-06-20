@@ -347,7 +347,7 @@ impl RateLimiter {
             let limiters = self.ip_limiters.read().await;
             if let Some(entry) = limiters.get(ip) {
                 // Return Arc clone of the entry's Arc
-                return Arc::clone(entry);
+                return Arc::clone(entry) as Arc<RwLock<AHashMap<RateLimitKind, HybridLimiter>>>;
             }
         }
 
@@ -361,7 +361,7 @@ impl RateLimiter {
 
         // Return the newly inserted Arc
         let limiters = self.ip_limiters.read().await;
-        Arc::clone(limiters.get(ip).unwrap())
+        Arc::clone(limiters.get(ip).unwrap()) as Arc<RwLock<AHashMap<RateLimitKind, HybridLimiter>>>
     }
 
     /// Get or create an identity limiter
@@ -374,7 +374,7 @@ impl RateLimiter {
         {
             let limiters = self.identity_limiters.read().await;
             if let Some(entry) = limiters.get(identity) {
-                return Arc::clone(entry);
+                return Arc::clone(entry) as Arc<RwLock<AHashMap<RateLimitKind, HybridLimiter>>>;
             }
         }
 
@@ -388,7 +388,7 @@ impl RateLimiter {
 
         // Return the newly inserted Arc
         let limiters = self.identity_limiters.read().await;
-        Arc::clone(limiters.get(identity).unwrap())
+        Arc::clone(limiters.get(identity).unwrap()) as Arc<RwLock<AHashMap<RateLimitKind, HybridLimiter>>>
     }
 
     /// Check rate limit for an IP

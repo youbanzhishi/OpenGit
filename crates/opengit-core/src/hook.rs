@@ -183,7 +183,7 @@ impl HookPipeline {
                 ref_name: update.ref_name.clone(),
                 action: result.action,
                 allowed: Some(allowed),
-                reason: Some(result.reason.clone()),
+                reason: result.reason.clone(),
             });
         }
 

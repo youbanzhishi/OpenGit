@@ -76,7 +76,7 @@ pub fn append_file(
         .with_context(|| "Failed to get branch tree")?;
 
     // Check if file already exists (prevent overwriting)
-    if tree.get(&request.path).is_some() {
+    if tree.get_path(&request.path, &mut String::new()).is_ok() {
         anyhow::bail!(
             "File '{}' already exists. Append API only allows creating new files.",
             request.path
@@ -138,7 +138,7 @@ pub fn file_exists(repo_path: &Path, branch: &str, path: &str) -> Result<bool> {
     let commit = repo.find_commit(branch_oid)?;
     let tree = commit.tree()?;
 
-    Ok(tree.get(path).is_some())
+    Ok(tree.get_path(path, &mut String::new()).is_ok())
 }
 
 /// List files in a directory (recursive)
@@ -175,7 +175,7 @@ fn collect_files_recursive(repo: &Git2Repo, tree: &Tree, prefix: &str, files: &m
             } else {
                 format!("{}/{}", prefix, name)
             };
-            if let Ok(sub_tree) = entry.to_object(repo).and_then(|obj| obj.into_tree().ok_or(())) {
+            if let Ok(sub_tree) = entry.to_object(repo).and_then(|obj| obj.into_tree()) {
                 collect_files_recursive(repo, &sub_tree, &sub_prefix, files);
             }
         }
