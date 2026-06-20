@@ -17,6 +17,7 @@ sha2 = { workspace = true }
 hex = { workspace = true }
 git2 = { workspace = true }
 reqwest = { workspace = true }
+tempfile = "3"
 tokio = { workspace = true }
 regex = "1"
 ahash = "0.8"
