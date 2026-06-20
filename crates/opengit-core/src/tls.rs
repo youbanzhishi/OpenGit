@@ -79,11 +79,11 @@ impl TlsConfig {
         let cert_file = File::open(&self.cert_file)?;
         let key_file = File::open(&self.key_file)?;
 
-        let certs_data: Vec<CertificateDer> = certs(&mut BufReader::new(cert_file))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-
-        let keys_data: Vec<PrivateKeyDer> = pkcs8_private_keys(&mut BufReader::new(key_file))
+        let mut certs_data: Vec<CertificateDer<'static>> = Vec::new();
+        for cert in certs(&mut BufReader::new(cert_file)).collect::<Result<Vec<_>, _>>()? {
+            certs_data.push(cert);
+        }
+        let keys_data: Vec<PrivateKeyDer<'static>> = pkcs8_private_keys(&mut BufReader::new(key_file))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 

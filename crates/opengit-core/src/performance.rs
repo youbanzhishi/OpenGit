@@ -255,7 +255,7 @@ impl Default for ConnectionPoolConfig {
 pub fn create_http_client(config: &ConnectionPoolConfig) -> reqwest::Client {
     let pool = reqwest::ClientBuilder::new()
         .pool_max_idle_per_host(config.max_per_host)
-        .tcp_keepalive(config.tcp_keepalive)
+        .tcp_keepalive(config.tcp_keepalive.then_some(Duration::from_secs(60)))
         .connect_timeout(Duration::from_secs(config.connect_timeout_secs))
         .timeout(Duration::from_secs(config.request_timeout_secs))
         .build()

@@ -457,9 +457,9 @@ impl MirrorManager {
     }
 
     /// Push to a single mirror target
-    async fn push_to_target(
+    async fn push_to_target<'a>(
         &self,
-        ctx: &MirrorPushContext,
+        ctx: &'a MirrorPushContext<'a>,
         target: &MirrorTarget,
     ) -> MirrorPushResult {
         // 构建远程 URL (替换 {repo})

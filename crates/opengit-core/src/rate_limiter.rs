@@ -509,7 +509,7 @@ impl RateLimiter {
                 allowed: true,
                 remaining: self.config.ip.read_limit as u32,
                 limit: self.config.ip.read_limit as u32,
-                reset_in: self.config.ip.window_secs,
+                reset_in: self.config.ip.window_secs as u32,
             }
         }
     }
@@ -531,7 +531,7 @@ impl RateLimiter {
                 allowed: true,
                 remaining: self.config.identity.read_limit as u32,
                 limit: self.config.identity.read_limit as u32,
-                reset_in: self.config.identity.window_secs,
+                reset_in: self.config.identity.window_secs as u32,
             }
         }
     }
