@@ -76,7 +76,7 @@ pub fn append_file(
         .with_context(|| "Failed to get branch tree")?;
 
     // Check if file already exists (prevent overwriting)
-    if tree.get_path(&request.path, &mut String::new()).is_ok() {
+    if tree.get_path(&request.path).is_ok() {
         anyhow::bail!(
             "File '{}' already exists. Append API only allows creating new files.",
             request.path
@@ -138,7 +138,7 @@ pub fn file_exists(repo_path: &Path, branch: &str, path: &str) -> Result<bool> {
     let commit = repo.find_commit(branch_oid)?;
     let tree = commit.tree()?;
 
-    Ok(tree.get_path(path, &mut String::new()).is_ok())
+    Ok(tree.get_path(path).is_ok())
 }
 
 /// List files in a directory (recursive)
@@ -197,7 +197,7 @@ mod tests {
         // Create initial commit
         let sig = Signature::now("test", "test@test.com").unwrap();
         let blob_oid = repo.blob(b"initial content").unwrap();
-        let mut tree_builder = repo.treebuilder(None)?;
+        let mut tree_builder = repo.treebuilder(None).unwrap();
         tree_builder.insert("README.md", blob_oid, 0o100644).unwrap();
         let tree_oid = tree_builder.write().unwrap();
 

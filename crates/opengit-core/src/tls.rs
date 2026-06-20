@@ -124,7 +124,7 @@ pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig
     params.key_usages = vec![KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::KeyEncipherment];
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
     
-    let dns_name = rustls::pki_types::DnsName::from_str("localhost")
+    let dns_name = rustls::pki_types::DnsName::try_from("localhost")
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     let ip_addr = IpAddr::from(StdIpAddr::from([127, 0, 0, 1]));
     
@@ -134,7 +134,7 @@ pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig
     ];
 
     let cert = rcgen::Certificate::from_params(params)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.into()))?;
 
     let key_pair = cert.get_key_pair();
 

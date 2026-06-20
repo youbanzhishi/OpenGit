@@ -443,7 +443,7 @@ mod tests {
 
     #[test]
     fn test_membership() {
-        let mut membership = GroupMembership::new();
+        let mut membership = GroupMembership::default();
         membership.add_repo("group1", "repo-a");
         membership.add_repo("group1", "repo-b");
         
