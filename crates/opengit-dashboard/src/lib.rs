@@ -973,3 +973,4 @@ async function login() {
 function closeModal() {
     document.getElementById('modal').classList.remove('active');
 }
+"#;
