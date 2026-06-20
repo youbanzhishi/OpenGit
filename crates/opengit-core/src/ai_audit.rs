@@ -16,6 +16,7 @@ use tracing::{error, info, warn};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
+    #[default]
     Low,
     Medium,
     High,

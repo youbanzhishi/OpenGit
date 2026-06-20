@@ -450,7 +450,8 @@ impl CiStatusChecker {
 
         for provider in &self.providers {
             let name = provider.name().to_string();
-            let result = provider.check_status(Arc::clone(provider), repo.to_string(), branch.to_string()).await;
+            let provider_arc: Arc<dyn CiProvider> = Arc::clone(provider);
+            let result = provider.check_status(provider_arc, repo.to_string(), branch.to_string()).await;
             match result {
                 Ok(result) => {
                     info!(
@@ -484,7 +485,7 @@ impl CiStatusChecker {
     ) -> Result<Vec<CiResult>> {
         tokio::time::timeout(timeout, self.check_all(repo, branch))
             .await
-            .map_err(|_| anyhow::anyhow!("CI check timed out"))?
+            .map_err(|_| anyhow::anyhow!("CI check timed out"))
     }
 }
 
