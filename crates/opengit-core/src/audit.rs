@@ -114,6 +114,11 @@ impl AuditLog {
         }
     }
 
+    /// Log a generic audit entry
+    pub fn log(&mut self, entry: AuditEntry) {
+        self.entries.push(entry);
+    }
+
     /// Log a mirror push operation
     pub fn log_mirror_push(
         &mut self,

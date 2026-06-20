@@ -4,7 +4,7 @@
 //! Only allows appending new files, prevents modification or deletion.
 
 use anyhow::{Context, Result};
-use git2::{Blob, Commit, Signature, Tree, TreeBuilder, Repository as Git2Repo};
+use git2::{Blob, Commit, Signature, Tree, Repository as Git2Repo};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::SystemTime;
@@ -88,7 +88,7 @@ pub fn append_file(
         .with_context(|| "Failed to create blob")?;
 
     // Build new tree with the new file
-    let mut tree_builder = TreeBuilder::new(&repo)?;
+    let mut tree_builder = repo.treebuilder(Some(&tree))?;
     tree_builder.insert(&request.path, blob_oid, 0o100644)?;
 
     let new_tree_oid = tree_builder.write()
@@ -152,12 +152,12 @@ pub fn list_files(repo_path: &Path, branch: &str, dir: Option<&str>) -> Result<V
     let prefix = dir.unwrap_or("");
     let mut files = Vec::new();
 
-    collect_files_recursive(&tree, prefix, &mut files);
+    collect_files_recursive(&repo, &tree, prefix, &mut files);
 
     Ok(files)
 }
 
-fn collect_files_recursive(tree: &Tree, prefix: &str, files: &mut Vec<String>) {
+fn collect_files_recursive(repo: &Git2Repo, tree: &Tree, prefix: &str, files: &mut Vec<String>) {
     let entry_iter = tree.iter();
 
     for entry in entry_iter {
@@ -175,8 +175,8 @@ fn collect_files_recursive(tree: &Tree, prefix: &str, files: &mut Vec<String>) {
             } else {
                 format!("{}/{}", prefix, name)
             };
-            if let Ok(sub_tree) = entry.to_tree() {
-                collect_files_recursive(&sub_tree, &sub_prefix, files);
+            if let Ok(sub_tree) = entry.to_object(repo).and_then(|obj| obj.into_tree().ok_or(())) {
+                collect_files_recursive(repo, &sub_tree, &sub_prefix, files);
             }
         }
     }
@@ -197,7 +197,7 @@ mod tests {
         // Create initial commit
         let sig = Signature::now("test", "test@test.com").unwrap();
         let blob_oid = repo.blob(b"initial content").unwrap();
-        let mut tree_builder = TreeBuilder::new(&repo).unwrap();
+        let mut tree_builder = repo.treebuilder(None)?;
         tree_builder.insert("README.md", blob_oid, 0o100644).unwrap();
         let tree_oid = tree_builder.write().unwrap();
 
@@ -234,7 +234,7 @@ mod tests {
 
         let sig = Signature::now("test", "test@test.com").unwrap();
         let blob_oid = repo.blob(b"existing").unwrap();
-        let mut tree_builder = TreeBuilder::new(&repo).unwrap();
+        let mut tree_builder = repo.treebuilder(None).unwrap();
         tree_builder.insert("existing.txt", blob_oid, 0o100644).unwrap();
         let tree_oid = tree_builder.write().unwrap();
 
