@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 /// Severity level for anomalies
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]

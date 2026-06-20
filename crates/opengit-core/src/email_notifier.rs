@@ -84,7 +84,6 @@ impl EmailNotifier {
     }
 
     async fn send_email(&self, subject: &str, body: &str) -> Result<()> {
-        use std::process::Command;
         let _ = self.try_sendmail(subject, body).await;
         Ok(())
     }

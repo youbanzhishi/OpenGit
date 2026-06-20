@@ -133,8 +133,8 @@ pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig
         SanType::IpAddress(ip_addr),
     ];
 
-    let cert = rcgen::Certificate::from_params(params)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.into()))?;
+    let cert = rcgen::Certificate::new(params, "")
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
     let key_pair = cert.get_key_pair();
 

@@ -206,7 +206,7 @@ pub fn validate_url(url: &str) -> Result<(), SecurityError> {
     // No credentials in URL
     let username = parsed.username();
     let password = parsed.password();
-    if username.is_some_and(|u| !u.is_empty()) || password.is_some_and(|p| !p.is_empty()) {
+    if !username.is_empty() || password.is_some_and(|p| !p.is_empty()) {
         return Err(SecurityError::CredentialsInUrl(url.to_string()));
     }
 

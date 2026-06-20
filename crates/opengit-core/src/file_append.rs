@@ -4,7 +4,7 @@
 //! Only allows appending new files, prevents modification or deletion.
 
 use anyhow::{Context, Result};
-use git2::{Blob, Commit, Signature, Tree, Repository as Git2Repo};
+use git2::{Signature, Tree, Repository as Git2Repo};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::SystemTime;
@@ -175,7 +175,7 @@ fn collect_files_recursive(repo: &Git2Repo, tree: &Tree, prefix: &str, files: &m
             } else {
                 format!("{}/{}", prefix, name)
             };
-            if let Ok(sub_tree) = entry.to_object(repo).and_then(|obj| obj.into_tree().map_err(anyhow::Error::msg)) {
+            if let Ok(sub_tree) = entry.to_object(repo).and_then(|obj| obj.into_tree()) {
                 collect_files_recursive(repo, &sub_tree, &sub_prefix, files);
             }
         }

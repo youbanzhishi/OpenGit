@@ -9,7 +9,6 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing;
 
 /// Code fingerprint for a commit or diff
 #[derive(Debug, Clone, Serialize, Deserialize)]

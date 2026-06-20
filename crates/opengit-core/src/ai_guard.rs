@@ -8,7 +8,6 @@
 
 use crate::audit::{AuditEntry, AuditLog};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::RwLock;
 
 /// 危险等级

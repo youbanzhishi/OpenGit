@@ -485,7 +485,7 @@ impl RateLimiter {
                 RateLimitResult::Allowed { remaining: r1, .. },
                 RateLimitResult::Allowed { remaining: r2, .. },
             ) => RateLimitResult::Allowed {
-                remaining: r1.min(r2),
+                remaining: (*r1).min(*r2),
                 reset_in: 0,
             },
             _ => identity_result,
