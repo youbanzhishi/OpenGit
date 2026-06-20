@@ -133,16 +133,18 @@ pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig
         SanType::IpAddress(ip_addr),
     ];
 
-    let cert = rcgen::Certificate::new(params, "")
+    // Generate a key pair for self-signed certificate
+    let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    
+    let cert = params.self_signed(&key_pair)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
-    let key_pair = cert.get_key_pair();
-
     // Generate private key
-    let private_key_pem = cert.serialize_private_key_pem();
+    let private_key_pem = key_pair.serialize_pem();
 
     // Generate certificate
-    let cert_pem = cert.serialize_pem()
+    let cert_pem = cert.pem()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
     // Write files

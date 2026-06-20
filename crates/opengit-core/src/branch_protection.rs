@@ -450,7 +450,7 @@ impl CiStatusChecker {
 
         for provider in &self.providers {
             let name = provider.name().to_string();
-            let provider_arc: Arc<dyn CiProvider> = Arc::new((**provider).as_ref());
+            let provider_arc: Arc<dyn CiProvider> = Arc::new((**provider).clone());
             let result = provider_arc.check_status(repo.to_string(), branch.to_string()).await;
             match result {
                 Ok(result) => {
