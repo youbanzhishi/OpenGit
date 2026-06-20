@@ -173,7 +173,7 @@ fn collect_files_recursive(repo: &Git2Repo, tree: &Tree, prefix: &str, files: &m
             } else {
                 format!("{}/{}", prefix, name)
             };
-            if let Ok(sub_tree) = entry.to_object(repo).and_then(|obj| obj.into_tree().map_err(|_obj| git2::Error::new(git2::ErrorCode::Invalid, git2::ErrorClass::Generic, "failed to convert object to tree"))) {
+            if let Ok(sub_tree) = entry.to_object(repo).and_then(|obj| obj.into_tree().unwrap_or_else(|_| panic!("failed to convert object to tree"))) {
                 collect_files_recursive(repo, &sub_tree, &sub_prefix, files);
             }
         }

@@ -609,7 +609,7 @@ impl AlertDispatcher {
             anomaly.description
         );
 
-        let body = format!(
+        let _body = format!(
             "AI Audit Anomaly Detected\n\
              ========================\n\n\
              Type: {:?}\n\
