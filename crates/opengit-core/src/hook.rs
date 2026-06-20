@@ -171,7 +171,7 @@ impl HookPipeline {
                 identity: Some(ctx.identity.clone()),
                 action: Some(format!("{:?}", result.action)),
                 ref_name: Some(update.ref_name.clone()),
-                allowed: Some(allowed),
+                allowed: allowed,
                 reason: result.reason.clone(),
                 details: crate::audit::AuditDetails::MirrorPush {
                     targets: vec![],
@@ -182,7 +182,7 @@ impl HookPipeline {
             ref_results.push(RefResult {
                 ref_name: update.ref_name.clone(),
                 action: result.action,
-                allowed: Some(allowed),
+                allowed: allowed,
                 reason: result.reason.clone(),
             });
         }
@@ -235,7 +235,7 @@ impl HookPipeline {
             ref_results: vec![RefResult {
                 ref_name: update.ref_name.clone(),
                 action: result.action,
-                allowed: Some(allowed),
+                allowed: allowed,
                 reason: result.reason.clone(),
             }],
             message: if allowed {

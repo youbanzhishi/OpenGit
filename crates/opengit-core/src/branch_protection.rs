@@ -187,7 +187,7 @@ impl Default for GitlabCiConfig {
 }
 
 /// CI provider trait for extensible CI integrations
-pub trait CiProvider: Send + Sync {
+pub trait CiProvider: Send + Sync + Clone {
     /// Provider name
     fn name(&self) -> &str;
     /// Check CI status for a repository and branch
@@ -243,7 +243,7 @@ impl GithubActionsProvider {
 
     fn parse_workflow_runs(&self, data: &serde_json::Value) -> CiResult {
         let runs_array = data.get("workflow_runs").and_then(|v| v.as_array());
-        let empty: Vec<&serde_json::Value> = vec![];
+        let empty: Vec<serde_json::Value> = vec![];
         let runs = runs_array.unwrap_or(&empty);
 
         let checks: Vec<CiCheck> = runs
@@ -351,7 +351,7 @@ impl GitlabCiProvider {
 
     fn parse_pipeline(&self, data: &serde_json::Value) -> CiResult {
         let pipelines_array = data.as_array();
-        let empty: Vec<&serde_json::Value> = vec![];
+        let empty: Vec<serde_json::Value> = vec![];
         let pipelines = pipelines_array.unwrap_or(&empty);
 
         let checks: Vec<CiCheck> = pipelines

@@ -275,7 +275,7 @@ impl AiGuard {
                         if rule.severity == Severity::Critical || rule.severity == Severity::High {
                             if rule.action == "block" {
                                 return GuardResult::blocked(
-                                    rule.message
+                                    &rule.message
                                         .clone()
                                         .unwrap_or_else(|| format!("规则 {} 阻断操作", rule.name)),
                                 );
