@@ -115,6 +115,7 @@ impl TokenBucket {
 }
 
 /// Combined rate limiter using sliding window + token bucket
+#[derive(Clone)]
 struct HybridLimiter {
     /// Sliding window for hard limit
     window_counter: WindowCounter,
