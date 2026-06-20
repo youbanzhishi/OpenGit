@@ -67,7 +67,7 @@ pub struct RefResult {
 /// The hook pipeline — processes git hook input and evaluates against policy
 pub struct HookPipeline {
     policy_engine: PolicyEngine,
-    audit_log: Mutex<AuditLog>,
+    audit_log: std::sync::Mutex<AuditLog>,
     /// AI Guard for code semantic analysis (P7)
     ai_guard: Option<AiGuard>,
 }
@@ -77,7 +77,7 @@ impl HookPipeline {
     pub fn new(policy_engine: PolicyEngine, audit_log: AuditLog) -> Self {
         Self {
             policy_engine,
-            audit_log: Mutex::new(audit_log),
+            audit_log: std::sync::Mutex::new(audit_log),
             ai_guard: None,
         }
     }
@@ -86,7 +86,7 @@ impl HookPipeline {
     pub fn with_ai_guard(policy_engine: PolicyEngine, audit_log: AuditLog, ai_guard: AiGuard) -> Self {
         Self {
             policy_engine,
-            audit_log: Mutex::new(audit_log),
+            audit_log: std::sync::Mutex::new(audit_log),
             ai_guard: Some(ai_guard),
         }
     }
