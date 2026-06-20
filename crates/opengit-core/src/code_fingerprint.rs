@@ -637,7 +637,7 @@ mod tests {
             ref_name: "main".to_string(),
         };
 
-        store.store(fp1).unwrap();
+        store.store(fp1.clone()).unwrap();
         store.store(fp2).unwrap();
 
         let similar = store.search_similar(&fp1);

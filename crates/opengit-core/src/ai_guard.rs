@@ -262,10 +262,14 @@ impl AiGuard {
                             branch: None,
                             actor: Some("ai-guard".to_string()),
                             identity: Some("ai-guard".to_string()),
-                            action: format!("guard:{}", rule.id),
+                            action: Some(format!("guard:{}", rule.id)),
                             ref_name: None,
-                            allowed: rule.action != "block",
+                            allowed: Some(rule.action != "block"),
                             reason: Some(rule.message.clone().unwrap_or_default()),
+                            details: crate::audit::AuditDetails::MirrorPush {
+                                targets: vec![],
+                                blocked_by: None,
+                            },
                         });
 
                         // Critical/High 直接阻断

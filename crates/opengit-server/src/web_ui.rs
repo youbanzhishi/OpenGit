@@ -371,15 +371,24 @@ async fn api_list_files(
 ) -> impl IntoResponse {
     let repo_path = state.config.repos_dir.join(&name);
     if !repo_path.exists() {
-        return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Repository not found"}))).into_response();
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Repository not found"})),
+        )
+        .into_response();
     }
 
     let branch = params.branch.unwrap_or_else(|| "main".to_string());
     let dir = params.path.as_deref();
 
     match list_files(&repo_path, &branch, dir) {
-        Ok(files) => Json(serde_json::json!({"files": files, "branch": branch})).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Ok(files) => Json(serde_json::json!({"files": files, "branch": branch}))
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+        .into_response(),
     }
 }
 
@@ -391,19 +400,32 @@ async fn api_check_file_exists(
 ) -> impl IntoResponse {
     let repo_path = state.config.repos_dir.join(&name);
     if !repo_path.exists() {
-        return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Repository not found"}))).into_response();
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Repository not found"})),
+        )
+        .into_response();
     }
 
     let path = match &params.path {
         Some(p) => p.clone(),
-        None => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "path parameter required"}))).into_response(),
+        None => return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "path parameter required"})),
+        )
+        .into_response(),
     };
 
     let branch = params.branch.unwrap_or_else(|| "main".to_string());
 
     match file_exists(&repo_path, &branch, &path) {
-        Ok(exists) => Json(serde_json::json!({"exists": exists, "path": path, "branch": branch})).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Ok(exists) => Json(serde_json::json!({"exists": exists, "path": path, "branch": branch}))
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+        .into_response(),
     }
 }
 
@@ -415,7 +437,11 @@ async fn api_append_file(
 ) -> impl IntoResponse {
     let repo_path = state.config.repos_dir.join(&name);
     if !repo_path.exists() {
-        return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Repository not found"}))).into_response();
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Repository not found"})),
+        )
+        .into_response();
     }
 
     // Default branch
@@ -430,11 +456,16 @@ async fn api_append_file(
                 "commit_id": result.commit_id,
                 "path": result.path,
                 "message": result.message
-            })).into_response()
+            }))
+            .into_response()
         }
         Err(e) => {
             tracing::warn!("Failed to append file: {}", e);
-            (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e.to_string()}))).into_response()
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
         }
     }
 }

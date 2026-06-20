@@ -836,7 +836,6 @@ mod tests {
                 ref_name: None,
                 allowed: None,
                 reason: None,
-                details: crate::audit::AuditDetails::Policy(crate::audit::PolicyAudit::default())me("agent".to_string()),
                 details: crate::audit::AuditDetails::MirrorPush {
                     targets: vec![],
                     blocked_by: None,
@@ -849,6 +848,11 @@ mod tests {
                 repo: "repo1".to_string(),
                 branch: Some("main".to_string()),
                 actor: Some("agent".to_string()),
+                identity: None,
+                action: None,
+                ref_name: None,
+                allowed: None,
+                reason: None,
                 details: crate::audit::AuditDetails::MirrorPush {
                     targets: vec![],
                     blocked_by: None,
@@ -878,6 +882,11 @@ mod tests {
                 repo: "repo1".to_string(),
                 branch: Some("main".to_string()),
                 actor: Some("agent".to_string()),
+                identity: None,
+                action: None,
+                ref_name: None,
+                allowed: None,
+                reason: None,
                 details: crate::audit::AuditDetails::MirrorPush {
                     targets: vec![],
                     blocked_by: None,
@@ -912,6 +921,11 @@ mod tests {
                 repo: "repo1".to_string(),
                 branch: Some("main".to_string()),
                 actor: Some("agent".to_string()),
+                identity: None,
+                action: None,
+                ref_name: None,
+                allowed: None,
+                reason: None,
                 details: crate::audit::AuditDetails::MirrorPush {
                     targets: vec![],
                     blocked_by: None,

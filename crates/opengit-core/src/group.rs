@@ -349,9 +349,16 @@ impl GroupsFile {
 
 /// Group membership tracking
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Default)]
 pub struct GroupMembership {
     /// group_id -> Vec<repo_name>
     pub memberships: HashMap<String, Vec<String>>,
+}
+
+impl GroupMembership {
+    pub fn new() -> Self {
+        Self::default()
+    }
 }
 
 impl GroupMembership {
