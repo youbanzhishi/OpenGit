@@ -11,10 +11,11 @@
 use rand::RngCore;
 use rcgen::{BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose, SanType};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, DnsName, IpAddr, ServerName};
-use rustls::{Certificate, PrivateKey, ServerConfig};
+use rustls::{ServerConfig, crypto::ring::default_provider};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::fs::File;
 use std::io::{BufReader, Error as IoError};
+use std::net::IpAddr as StdIpAddr;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -78,25 +79,21 @@ impl TlsConfig {
         let cert_file = File::open(&self.cert_file)?;
         let key_file = File::open(&self.key_file)?;
 
-        let certs = certs(&mut BufReader::new(cert_file))
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
-            .into_iter()
-            .map(Certificate)
-            .collect();
+        let certs_data: Vec<CertificateDer> = certs(&mut BufReader::new(cert_file))
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
-        let keys = pkcs8_private_keys(&mut BufReader::new(key_file))
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
-            .into_iter()
-            .map(PrivateKey)
-            .collect::<Vec<_>>();
+        let keys_data: Vec<PrivateKeyDer> = pkcs8_private_keys(&mut BufReader::new(key_file))
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
-        let key = keys.into_iter().next()
+        let key = keys_data.into_iter().next()
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No private key found"))?;
 
-        let mut config = ServerConfig::builder()
-            .with_safe_defaults()
+        let provider = default_provider();
+        let mut config = ServerConfig::builder_with_provider(provider.into())
+            .with_safe_default_protocol_versions()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
             .with_no_client_auth()
-            .with_single_cert(certs, key)
+            .with_single_cert(certs_data, key)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         // Configure ALPN for HTTP/2
@@ -124,9 +121,14 @@ pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig
     params.distinguished_name.push(DnType::CommonName, "localhost");
     params.key_usages = vec![KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::KeyEncipherment];
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
+    
+    let dns_name = DnsName::try_from_utf8_str("localhost")
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let ip_addr = IpAddr::from(StdIpAddr::from([127, 0, 0, 1]));
+    
     params.subject_alt_names = vec![
-        SanType::DnsName(DnsName::try_from_ascii_str("localhost").unwrap()),
-        SanType::IpAddress(IpAddr::from([127, 0, 0, 1])),
+        SanType::DnsName(dns_name),
+        SanType::IpAddress(ip_addr),
     ];
 
     let cert = rcgen::Certificate::from_params(params)
@@ -136,13 +138,10 @@ pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig
 
     // Generate private key
     let private_key_pem = cert.serialize_private_key_pem();
-    let private_key_der = key_pair.serialize_private_key_der();
-    let private_key = PrivateKey(private_key_der);
 
     // Generate certificate
     let cert_pem = cert.serialize_pem()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    let cert = Certificate(cert_pem.into_bytes());
 
     // Write files
     std::fs::create_dir_all(output_dir)?;
@@ -150,8 +149,8 @@ pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig
     let cert_path = output_dir.join("cert.pem");
     let key_path = output_dir.join("key.pem");
 
-    std::fs::write(&cert_path, cert_pem)?;
-    std::fs::write(&key_path, private_key_pem)?;
+    std::fs::write(&cert_path, cert_pem.clone())?;
+    std::fs::write(&key_path, private_key_pem.clone())?;
 
     Ok(TlsConfig {
         enabled: true,

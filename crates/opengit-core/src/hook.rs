@@ -173,6 +173,10 @@ impl HookPipeline {
                 ref_name: Some(update.ref_name.clone()),
                 allowed: Some(allowed),
                 reason: Some(result.reason.clone()),
+                details: crate::audit::AuditDetails::MirrorPush {
+                    targets: vec![],
+                    blocked_by: None,
+                },
             });
 
             ref_results.push(RefResult {
@@ -209,13 +213,21 @@ impl HookPipeline {
         let allowed = result.is_allowed();
 
         self.audit_log.log(AuditEntry {
+            id: uuid::Uuid::new_v4().to_string(),
             timestamp: chrono::Utc::now().to_rfc3339(),
+            operation: crate::audit::AuditOperation::MirrorPush,
             repo: ctx.repo.clone(),
-            identity: ctx.identity.clone(),
-            action: format!("{:?}", result.action),
+            branch: None,
+            actor: None,
+            identity: Some(ctx.identity.clone()),
+            action: Some(format!("{:?}", result.action)),
             ref_name: Some(update.ref_name.clone()),
-            allowed,
+            allowed: Some(allowed),
             reason: result.reason.clone(),
+            details: crate::audit::AuditDetails::MirrorPush {
+                targets: vec![],
+                blocked_by: None,
+            },
         });
 
         HookResult {
