@@ -83,11 +83,10 @@ impl TlsConfig {
         for cert in certs(&mut BufReader::new(cert_file)).collect::<Result<Vec<_>, _>>()? {
             certs_data.push(cert);
         }
-        let keys_data: Vec<PrivateKeyDer<'static>> = pkcs8_private_keys(&mut BufReader::new(key_file))
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
-            .into_iter()
-            .map(|k| k.into())
-            .collect();
+        let mut keys_data: Vec<PrivateKeyDer<'static>> = Vec::new();
+        for key in pkcs8_private_keys(&mut BufReader::new(key_file)) {
+            keys_data.push(key.map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?.into());
+        }
 
         let key = keys_data.into_iter().next()
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No private key found"))?;
