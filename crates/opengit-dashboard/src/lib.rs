@@ -36,7 +36,9 @@ async fn dashboard_index() -> impl IntoResponse {
 /// Embedded JavaScript
 async fn dashboard_js() -> impl IntoResponse {
     (
-        ["Content-Type", "application/javascript"],
+        axum::http::HeaderMap::from_iter([
+            (axum::http::HeaderName::from_static("content-type"), "application/javascript".parse().unwrap()),
+        ]),
         DASHBOARD_JS,
     )
 }
@@ -44,7 +46,9 @@ async fn dashboard_js() -> impl IntoResponse {
 /// Embedded CSS
 async fn dashboard_css() -> impl IntoResponse {
     (
-        ["Content-Type", "text/css"],
+        axum::http::HeaderMap::from_iter([
+            (axum::http::HeaderName::from_static("content-type"), "text/css".parse().unwrap()),
+        ]),
         DASHBOARD_CSS,
     )
 }
