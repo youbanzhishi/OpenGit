@@ -446,7 +446,7 @@ impl CiStatusChecker {
 
         for provider in &self.providers {
             let name = provider.name().to_string();
-            let result = provider.check_status(repo.to_string(), branch.to_string()).await;
+            let result = (&**provider as &dyn CiProvider).check_status(Arc::clone(provider), repo.to_string(), branch.to_string()).await;
             match result {
                 Ok(result) => {
                     info!(
