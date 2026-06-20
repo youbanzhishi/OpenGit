@@ -9,6 +9,7 @@ use crate::ai_guard::AiGuard;
 use crate::audit::{AuditEntry, AuditLog};
 use crate::policy::{Action, PolicyEngine};
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 
 /// Context provided to hook execution
 #[derive(Debug, Clone)]
@@ -66,7 +67,7 @@ pub struct RefResult {
 /// The hook pipeline — processes git hook input and evaluates against policy
 pub struct HookPipeline {
     policy_engine: PolicyEngine,
-    audit_log: AuditLog,
+    audit_log: Mutex<AuditLog>,
     /// AI Guard for code semantic analysis (P7)
     ai_guard: Option<AiGuard>,
 }
@@ -76,7 +77,7 @@ impl HookPipeline {
     pub fn new(policy_engine: PolicyEngine, audit_log: AuditLog) -> Self {
         Self {
             policy_engine,
-            audit_log,
+            audit_log: Mutex::new(audit_log),
             ai_guard: None,
         }
     }
@@ -85,7 +86,7 @@ impl HookPipeline {
     pub fn with_ai_guard(policy_engine: PolicyEngine, audit_log: AuditLog, ai_guard: AiGuard) -> Self {
         Self {
             policy_engine,
-            audit_log,
+            audit_log: Mutex::new(audit_log),
             ai_guard: Some(ai_guard),
         }
     }
@@ -161,28 +162,30 @@ impl HookPipeline {
             }
 
             // Audit log entry
-            self.audit_log.log(AuditEntry {
-                id: uuid::Uuid::new_v4().to_string(),
-                timestamp: chrono::Utc::now().to_rfc3339(),
-                operation: crate::audit::AuditOperation::MirrorPush,
-                repo: ctx.repo.clone(),
-                branch: None,
-                actor: None,
-                identity: Some(ctx.identity.clone()),
-                action: Some(format!("{:?}", result.action)),
-                ref_name: Some(update.ref_name.clone()),
-                allowed: Some(allowed),
-                reason: result.reason.clone(),
-                details: crate::audit::AuditDetails::MirrorPush {
-                    targets: vec![],
-                    blocked_by: None,
-                },
-            });
+            if let Ok(mut log) = self.audit_log.lock() {
+                log.log(AuditEntry {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    operation: crate::audit::AuditOperation::MirrorPush,
+                    repo: ctx.repo.clone(),
+                    branch: None,
+                    actor: None,
+                    identity: Some(ctx.identity.clone()),
+                    action: Some(format!("{:?}", result.action)),
+                    ref_name: Some(update.ref_name.clone()),
+                    allowed: allowed,
+                    reason: result.reason.clone(),
+                    details: crate::audit::AuditDetails::MirrorPush {
+                        targets: vec![],
+                        blocked_by: None,
+                    },
+                });
+            }
 
             ref_results.push(RefResult {
                 ref_name: update.ref_name.clone(),
                 action: result.action,
-                allowed: Some(allowed),
+                allowed: allowed,
                 reason: result.reason.clone(),
             });
         }
@@ -212,30 +215,32 @@ impl HookPipeline {
 
         let allowed = result.is_allowed();
 
-        self.audit_log.log(AuditEntry {
-            id: uuid::Uuid::new_v4().to_string(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            operation: crate::audit::AuditOperation::MirrorPush,
-            repo: ctx.repo.clone(),
-            branch: None,
-            actor: None,
-            identity: Some(ctx.identity.clone()),
-            action: Some(format!("{:?}", result.action)),
-            ref_name: Some(update.ref_name.clone()),
-            allowed: Some(allowed),
-            reason: result.reason.clone(),
-            details: crate::audit::AuditDetails::MirrorPush {
-                targets: vec![],
-                blocked_by: None,
-            },
-        });
+        if let Ok(mut log) = self.audit_log.lock() {
+            log.log(AuditEntry {
+                id: uuid::Uuid::new_v4().to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                operation: crate::audit::AuditOperation::MirrorPush,
+                repo: ctx.repo.clone(),
+                branch: None,
+                actor: None,
+                identity: Some(ctx.identity.clone()),
+                action: Some(format!("{:?}", result.action)),
+                ref_name: Some(update.ref_name.clone()),
+                allowed: Some(allowed),
+                reason: result.reason.clone(),
+                details: crate::audit::AuditDetails::MirrorPush {
+                    targets: vec![],
+                    blocked_by: None,
+                },
+            });
+        }
 
         HookResult {
             allowed,
             ref_results: vec![RefResult {
                 ref_name: update.ref_name.clone(),
                 action: result.action,
-                allowed: Some(allowed),
+                allowed: allowed,
                 reason: result.reason.clone(),
             }],
             message: if allowed {

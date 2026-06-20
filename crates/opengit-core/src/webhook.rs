@@ -445,7 +445,7 @@ impl AlertDispatcher {
             cmd.arg("-f").arg(from);
         }
 
-        let mut email = format!(
+        let _email = format!(
             "To: {}\n\
              From: {}\n\
              Subject: {}\n\
@@ -566,7 +566,9 @@ fn rand_simple() -> u64 {
             .unwrap()
             .as_secs(),
     );
-    hasher.write_u64(rand_simple());
+    // Use nanos from instant for additional entropy
+    let instant = std::time::Instant::now();
+    hasher.write_u64(instant.elapsed().as_nanos() as u64);
     hasher.finish()
 }
 

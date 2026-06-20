@@ -7,7 +7,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{error, info};
+use tracing;
 
 use crate::mirror::{MirrorError, MirrorPushResult, MirrorSeverity};
 
@@ -395,7 +395,7 @@ impl AuditEntry {
                 }
             }
             AuditDetails::AlertEvent {
-                alert_id,
+                alert_id: _alert_id,
                 error_code,
                 severity,
                 message,

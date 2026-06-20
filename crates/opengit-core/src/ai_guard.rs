@@ -8,7 +8,6 @@
 
 use crate::audit::{AuditEntry, AuditLog};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::RwLock;
 
 /// 危险等级
@@ -199,7 +198,7 @@ impl AiGuardConfig {
 /// AI Guard 评估器
 pub struct AiGuard {
     config: RwLock<AiGuardConfig>,
-    audit_log: AuditLog,
+    audit_log: Mutex<AuditLog>,
 }
 
 impl AiGuard {
@@ -207,7 +206,7 @@ impl AiGuard {
     pub fn new(config: AiGuardConfig, audit_log: AuditLog) -> Self {
         Self {
             config: RwLock::new(config),
-            audit_log,
+            audit_log: Mutex::new(audit_log),
         }
     }
 
@@ -254,7 +253,8 @@ impl AiGuard {
                         });
 
                         // 记录审计
-                        self.audit_log.log(AuditEntry {
+                        if let Ok(mut log) = self.audit_log.lock() {
+                            log.log(AuditEntry {
                             id: uuid::Uuid::new_v4().to_string(),
                             timestamp: chrono::Utc::now().to_rfc3339(),
                             operation: crate::audit::AuditOperation::MirrorPush,
@@ -271,12 +271,13 @@ impl AiGuard {
                                 blocked_by: None,
                             },
                         });
+                        }
 
                         // Critical/High 直接阻断
                         if rule.severity == Severity::Critical || rule.severity == Severity::High {
                             if rule.action == "block" {
                                 return GuardResult::blocked(
-                                    rule.message
+                                    &rule.message
                                         .clone()
                                         .unwrap_or_else(|| format!("规则 {} 阻断操作", rule.name)),
                                 );
@@ -304,7 +305,7 @@ impl AiGuard {
     pub fn evaluate_branch_protection(
         &self,
         branch: &str,
-        is_delete: bool,
+        _is_delete: bool,
     ) -> GuardResult {
         let config = match self.config.read() {
             Ok(c) => c,

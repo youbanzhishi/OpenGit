@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 /// Severity level for anomalies
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
@@ -935,7 +935,7 @@ mod tests {
             .collect();
 
         let anomalies = auditor.detect_anomalies("agent", &events);
-        let unusual_time: Vec<_> = anomalies
+        let _unusual_time: Vec<_> = anomalies
             .into_iter()
             .filter(|a| matches!(a.anomaly_type, AnomalyType::UnusualTime))
             .collect();

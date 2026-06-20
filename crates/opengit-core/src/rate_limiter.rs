@@ -147,9 +147,7 @@ impl HybridLimiter {
         // Then check token bucket (burst limit)
         if !self.token_bucket.try_consume(1.0) {
             // Revert the window counter
-            if let Some(last) = self.window_counter.timestamps.last() {
-                self.window_counter.timestamps.pop();
-            }
+            self.window_counter.timestamps.pop();
             return RateLimitResult::Denied {
                 reason: "burst_limit".into(),
                 retry_after: Some(1),
@@ -485,7 +483,7 @@ impl RateLimiter {
                 RateLimitResult::Allowed { remaining: r1, .. },
                 RateLimitResult::Allowed { remaining: r2, .. },
             ) => RateLimitResult::Allowed {
-                remaining: r1.min(r2),
+                remaining: (*r1).min(*r2),
                 reset_in: 0,
             },
             _ => identity_result,

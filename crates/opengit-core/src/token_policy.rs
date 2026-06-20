@@ -111,7 +111,7 @@ impl PolicyRule {
     }
 
     /// Check if the condition matches
-    pub fn matches(&self, context: &PolicyContext) -> bool {
+    pub fn matches(&self, _context: &PolicyContext) -> bool {
         match &self.condition {
             Condition::Always => true,
             Condition::Never => false,
