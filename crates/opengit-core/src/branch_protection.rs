@@ -187,7 +187,7 @@ impl Default for GitlabCiConfig {
 }
 
 /// CI provider trait for extensible CI integrations
-pub trait CiProvider: Send + Sync + Clone {
+pub trait CiProvider: Send + Sync {
     /// Provider name
     fn name(&self) -> &str;
     /// Check CI status for a repository and branch
@@ -450,7 +450,12 @@ impl CiStatusChecker {
 
         for provider in &self.providers {
             let name = provider.name().to_string();
-            let provider_arc: Arc<dyn CiProvider> = Arc::new((**provider).clone());
+            // Create Arc from Box by converting pointer representation
+            let provider_arc = unsafe {
+                let boxed: *const Box<dyn CiProvider> = provider;
+                let ptr = (*boxed) as *const dyn CiProvider as *const Arc<dyn CiProvider>;
+                Arc::from_raw(ptr)
+            };
             let result = provider_arc.check_status(repo.to_string(), branch.to_string()).await;
             match result {
                 Ok(result) => {
