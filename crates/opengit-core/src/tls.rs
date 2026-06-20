@@ -10,11 +10,11 @@
 
 use rand::RngCore;
 use rcgen::{BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose, SanType};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, DnsName, IpAddr, ServerName};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, IpAddr, ServerName};
 use rustls::{ServerConfig, crypto::ring::default_provider};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::fs::File;
-use std::io::{BufReader, Error as IoError};
+use std::io::{BufReader, ErrorKind};
 use std::net::IpAddr as StdIpAddr;
 use std::path::Path;
 use std::sync::Arc;
@@ -80,9 +80,11 @@ impl TlsConfig {
         let key_file = File::open(&self.key_file)?;
 
         let certs_data: Vec<CertificateDer> = certs(&mut BufReader::new(cert_file))
+            .collect::<Result<Vec<_>, _>>()
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         let keys_data: Vec<PrivateKeyDer> = pkcs8_private_keys(&mut BufReader::new(key_file))
+            .collect::<Result<Vec<_>, _>>()
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         let key = keys_data.into_iter().next()
@@ -116,13 +118,13 @@ impl TlsConfig {
 /// Generate self-signed certificate for development
 pub fn generate_self_signed_cert(output_dir: &Path) -> std::io::Result<TlsConfig> {
     let mut params = CertificateParams::default();
-    params.is_ca = BasicConstraints::Unconstrained;
+    params.is_ca = rcgen::IsCa::Ca(BasicConstraints::Unconstrained);
     params.distinguished_name = DistinguishedName::new();
     params.distinguished_name.push(DnType::CommonName, "localhost");
     params.key_usages = vec![KeyUsagePurpose::DigitalSignature, KeyUsagePurpose::KeyEncipherment];
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
     
-    let dns_name = DnsName::try_from_utf8_str("localhost")
+    let dns_name = rustls::pki_types::DnsName::from_str("localhost")
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     let ip_addr = IpAddr::from(StdIpAddr::from([127, 0, 0, 1]));
     
