@@ -84,9 +84,12 @@ impl TlsConfig {
             certs_data.push(cert);
         }
         let keys_data: Vec<PrivateKeyDer<'static>> = pkcs8_private_keys(&mut BufReader::new(key_file))
-            .collect::<Result<Vec<_>, _>>()
+            .collect::<Result<Vec<rustls_pem_parse::PrivatePkcs8KeyDer>, _>>()
             .map_err(|e| format!("pkcs8 error: {}", e))
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
+            .into_iter()
+            .map(|k| k.into())
+            .collect();
 
         let key = keys_data.into_iter().next()
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No private key found"))?;
