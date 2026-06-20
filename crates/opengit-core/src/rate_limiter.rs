@@ -340,14 +340,14 @@ impl RateLimiter {
     async fn get_ip_limiter(
         &self,
         ip: &str,
-        kind: RateLimitKind,
+        _kind: RateLimitKind,
     ) -> Arc<RwLock<AHashMap<RateLimitKind, HybridLimiter>>> {
         // First check if we have an entry for this IP
         {
             let limiters = self.ip_limiters.read().await;
             if let Some(entry) = limiters.get(ip) {
-                // Return Arc clone of the entry's Arc
-                return Arc::clone(entry) as Arc<RwLock<AHashMap<RateLimitKind, HybridLimiter>>>;
+                // Return wrapped in Arc<RwLock>
+                return Arc::new(RwLock::new(entry.clone()));
             }
         }
 
@@ -356,25 +356,24 @@ impl RateLimiter {
 
         {
             let mut limiters = self.ip_limiters.write().await;
-            limiters.insert(ip.to_string(), Arc::new(RwLock::new(entry)));
+            limiters.insert(ip.to_string(), entry.clone());
         }
 
-        // Return the newly inserted Arc
-        let limiters = self.ip_limiters.read().await;
-        Arc::clone(limiters.get(ip).unwrap()) as Arc<RwLock<AHashMap<RateLimitKind, HybridLimiter>>>
+        // Return the newly inserted entry wrapped in Arc<RwLock>
+        Arc::new(RwLock::new(entry))
     }
 
     /// Get or create an identity limiter
     async fn get_identity_limiter(
         &self,
         identity: &str,
-        kind: RateLimitKind,
+        _kind: RateLimitKind,
     ) -> Arc<RwLock<AHashMap<RateLimitKind, HybridLimiter>>> {
         // First check if we have an entry for this identity
         {
             let limiters = self.identity_limiters.read().await;
             if let Some(entry) = limiters.get(identity) {
-                return Arc::clone(entry) as Arc<RwLock<AHashMap<RateLimitKind, HybridLimiter>>>;
+                return Arc::new(RwLock::new(entry.clone()));
             }
         }
 
@@ -383,12 +382,11 @@ impl RateLimiter {
 
         {
             let mut limiters = self.identity_limiters.write().await;
-            limiters.insert(identity.to_string(), Arc::new(RwLock::new(entry)));
+            limiters.insert(identity.to_string(), entry.clone());
         }
 
-        // Return the newly inserted Arc
-        let limiters = self.identity_limiters.read().await;
-        Arc::clone(limiters.get(identity).unwrap()) as Arc<RwLock<AHashMap<RateLimitKind, HybridLimiter>>>
+        // Return the newly inserted entry wrapped in Arc<RwLock>
+        Arc::new(RwLock::new(entry))
     }
 
     /// Check rate limit for an IP
