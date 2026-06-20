@@ -8,7 +8,7 @@
 
 use crate::audit::{AuditEntry, AuditLog};
 use serde::{Deserialize, Serialize};
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 
 /// 危险等级
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
