@@ -71,7 +71,7 @@ pub use performance::{
     CacheStatsSnapshot, ConnectionPoolConfig, PerfConfig, PerfManager, PerfStats,
 };
 pub use plugin::{HookPlugin, PluginManager, PluginsFile};
-pub use policy::{Action, Permission, Policy, PolicyEngine};
+pub use policy::{Action, EvalResult, Permission, Policy, PolicyEngine, PolicyRule};
 pub use rate_limiter::{
     RateLimitConfig, RateLimitHeaders, RateLimitKind, RateLimitResult, RateLimitStatus, RateLimiter,
 };

@@ -113,6 +113,20 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         tracing::info!("Email notifications disabled (no config)");
     }
 
+    // P9: Initialize groups
+    let groups = if config.group_file.exists() {
+        GroupsFile::load(&config.group_file)?
+    } else {
+        GroupsFile::new()
+    };
+
+    // P9: Initialize group membership
+    let group_membership = if config.group_membership_file.exists() {
+        GroupMembership::load(&config.group_membership_file)?
+    } else {
+        GroupMembership::default()
+    };
+
     let state = Arc::new(AppState {
         config: config.clone(),
         policy_engine: RwLock::new(policy_engine),

@@ -42,6 +42,12 @@ pub struct ServerConfig {
     /// Email notification config file path (P8.2)
     #[serde(default = "default_email_file")]
     pub email_file: PathBuf,
+    /// Groups config file path (P9)
+    #[serde(default = "default_group_file")]
+    pub group_file: PathBuf,
+    /// Group membership config file path (P9)
+    #[serde(default = "default_group_membership_file")]
+    pub group_membership_file: PathBuf,
 }
 
 fn default_rate_limit_file() -> PathBuf {
@@ -66,6 +72,14 @@ fn default_mirror_file() -> PathBuf {
 
 fn default_email_file() -> PathBuf {
     PathBuf::from("config/email.toml")
+}
+
+fn default_group_file() -> PathBuf {
+    PathBuf::from("config/groups.yaml")
+}
+
+fn default_group_membership_file() -> PathBuf {
+    PathBuf::from("config/group-membership.yaml")
 }
 
 impl ServerConfig {
@@ -109,6 +123,8 @@ impl ServerConfig {
             mirror_file: PathBuf::from("config/mirrors.toml"),
             rate_limit_file: PathBuf::from("config/rate-limit.toml"),
             email_file: PathBuf::from("config/email.toml"),
+            group_file: PathBuf::from("config/groups.yaml"),
+            group_membership_file: PathBuf::from("config/group-membership.yaml"),
         }
     }
 }

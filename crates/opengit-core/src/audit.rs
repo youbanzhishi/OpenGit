@@ -114,6 +114,11 @@ impl AuditLog {
         }
     }
 
+    /// Load audit log from file, or create a new one if file doesn't exist
+    pub fn with_file(path: &std::path::Path) -> Self {
+        Self::load(path).unwrap_or_default()
+    }
+
     /// Log a generic audit entry
     pub fn log(&mut self, entry: AuditEntry) {
         self.entries.push(entry);
