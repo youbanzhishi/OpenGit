@@ -192,7 +192,7 @@ impl TokenPolicy {
     /// Add a rule to the policy
     pub fn add_rule(&mut self, rule: PolicyRule) {
         self.rules.push(rule);
-        self.rules.sort_by(|a, b| b.priority.cmp(&a.priority));
+        self.rules.sort_by_key(|b| std::cmp::Reverse(b.priority));
     }
 
     /// Evaluate the policy for a given context

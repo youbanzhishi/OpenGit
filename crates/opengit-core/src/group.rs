@@ -9,18 +9,13 @@ use std::collections::HashMap;
 use std::path::Path;
 
 /// Visibility level for groups
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Visibility {
     Public,   // Visible to all
     Internal, // Visible to authenticated users
+    #[default]
     Private,  // Only visible to members
-}
-
-impl Default for Visibility {
-    fn default() -> Self {
-        Visibility::Private
-    }
 }
 
 /// A repository group/organization for classification
