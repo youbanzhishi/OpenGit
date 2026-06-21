@@ -173,8 +173,10 @@ fn collect_files_recursive(repo: &Git2Repo, tree: &Tree, prefix: &str, files: &m
             } else {
                 format!("{}/{}", prefix, name)
             };
-            if let Ok(sub_tree) = entry.to_object(repo).and_then(|obj| obj.into_tree().unwrap_or_else(|_| panic!("failed to convert object to tree"))) {
-                collect_files_recursive(repo, &sub_tree, &sub_prefix, files);
+            if let Ok(obj) = entry.to_object(repo) {
+                if let Ok(sub_tree) = obj.into_tree() {
+                    collect_files_recursive(repo, &sub_tree, &sub_prefix, files);
+                }
             }
         }
     }
