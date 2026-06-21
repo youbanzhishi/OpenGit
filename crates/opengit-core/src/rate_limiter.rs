@@ -107,6 +107,7 @@ impl TokenBucket {
     }
 
     /// Get remaining tokens
+    #[allow(dead_code)]
     fn remaining(&self) -> f64 {
         let elapsed = self.last_refill.elapsed().as_secs_f64();
         let new_tokens = elapsed * self.refill_rate;
@@ -306,8 +307,11 @@ pub struct RateLimiter {
     /// Configuration
     config: RateLimitConfig,
     /// Cleanup interval
+    #[allow(dead_code)]
     cleanup_interval: Duration,
 }
+
+#[allow(dead_code)]
 
 impl RateLimiter {
     /// Create a new rate limiter from config

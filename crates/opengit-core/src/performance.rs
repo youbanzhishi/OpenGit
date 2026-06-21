@@ -45,6 +45,7 @@ struct CacheEntry {
 }
 
 #[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
 struct CacheStats {
     hits: u64,
     misses: u64,
@@ -355,13 +356,15 @@ impl RefCache {
 }
 
 /// Repository metadata cache
+#[allow(dead_code)]
 pub struct RepoMetaCache {
     entries: RwLock<AHashMap<PathBuf, RepoMeta>>,
     ttl: Duration,
 }
 
 #[derive(Debug, Clone)]
-struct RepoMeta {
+#[allow(dead_code)]
+pub struct RepoMeta {
     branch_count: usize,
     tag_count: usize,
     total_refs: usize,
@@ -494,6 +497,7 @@ impl Default for PerfConfig {
 }
 
 /// Performance manager
+#[allow(dead_code)]
 pub struct PerfManager {
     object_cache: GitObjectCache,
     ref_cache: RefCache,

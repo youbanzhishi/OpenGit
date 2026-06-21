@@ -284,6 +284,7 @@ impl AiAuditor {
     }
 
     /// Compute baseline statistics from audit entries
+    #[allow(clippy::field_reassign_with_default)]
     fn compute_baseline(&self, identity: &str, entries: &[AuditEntry]) -> UserBehaviorBaseline {
         let mut baseline = UserBehaviorBaseline::default();
         baseline.identity = identity.to_string();
@@ -311,7 +312,7 @@ impl AiAuditor {
         }
 
         let mut hours: Vec<(u32, usize)> = hour_counts.into_iter().collect();
-        hours.sort_by(|a, b| b.1.cmp(&a.1));
+        hours.sort_by_key(|b| std::cmp::Reverse(b.1));
         baseline.peak_hours = hours.into_iter().take(6).map(|(h, _)| h).collect();
 
         // Collect common actions
@@ -322,7 +323,7 @@ impl AiAuditor {
         }
 
         let mut actions: Vec<(String, usize)> = action_counts.into_iter().collect();
-        actions.sort_by(|a, b| b.1.cmp(&a.1));
+        actions.sort_by_key(|b| std::cmp::Reverse(b.1));
         baseline.common_actions = actions
             .into_iter()
             .take(10)
@@ -338,7 +339,7 @@ impl AiAuditor {
         }
 
         let mut repos: Vec<(String, usize)> = repo_counts.into_iter().collect();
-        repos.sort_by(|a, b| b.1.cmp(&a.1));
+        repos.sort_by_key(|b| std::cmp::Reverse(b.1));
         baseline.typical_repos = repos.into_iter().take(20).map(|(r, _)| r).collect();
 
         baseline.last_updated = chrono_lite_now();

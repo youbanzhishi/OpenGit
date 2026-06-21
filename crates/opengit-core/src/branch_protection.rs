@@ -417,6 +417,7 @@ impl CiProvider for GitlabCiProvider {
 }
 
 /// CI status checker that aggregates multiple providers
+#[allow(dead_code)]
 pub struct CiStatusChecker {
     client: reqwest::Client,
     providers: Vec<Arc<dyn CiProvider>>,
