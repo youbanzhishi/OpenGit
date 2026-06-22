@@ -33,7 +33,7 @@ jobs:
         with:
           components: clippy
       - name: Run Clippy
-        run: cargo clippy --all-features 2>&1 || true
+        run: cargo clippy --all-features -- -D warnings
 
   test:
     name: Test Suite
