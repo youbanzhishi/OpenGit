@@ -33,7 +33,7 @@ jobs:
         with:
           components: clippy
       - name: Run Clippy
-        run: cargo build --all-features 2>&1 || cargo check --all-features
+        run: cargo clippy --all-features -- -D warnings
 
   test:
     name: Test Suite
@@ -44,6 +44,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: crates/* -> target
-      # Temporarily skip tests to verify compilation passes
-      # - name: Run tests
-      #   run: cargo test --all --all-features
+      - name: Run tests
+        run: cargo test --all --all-features
