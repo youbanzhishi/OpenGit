@@ -86,8 +86,8 @@ pub use tls::{
     TlsConfig, TlsVersion,
 };
 pub use token_policy::{
-    Consequence, Condition, PolicyRule, TokenLifecycleManager, TokenPolicy, TokenPolicyEngine,
-    TokenRotation,
+    Consequence, Condition, PolicyRule as TokenPolicyRule, TokenLifecycleManager, TokenPolicy,
+    TokenPolicyEngine, TokenRotation,
 };
 pub use webhook::{AlertConfig, AlertDispatcher as MirrorAlertDispatcher, MirrorAlert, AlertStore};
 pub use group::{Group, GroupsFile, GroupMembership, Visibility};

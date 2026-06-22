@@ -8,18 +8,14 @@
 //! - Security headers (HSTS, CSP, etc.)
 //! - Token encryption at rest
 
-use rand::RngCore;
 use rcgen::{BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose, SanType};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::{ServerConfig, crypto::ring::default_provider};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::fs::File;
-use std::io::{BufReader, ErrorKind};
+use std::io::BufReader;
 use std::net::IpAddr as StdIpAddr;
 use std::path::Path;
-use std::sync::Arc;
-use tokio::net::TcpListener;
-use tokio_rustls::TlsAcceptor;
 
 /// TLS configuration
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

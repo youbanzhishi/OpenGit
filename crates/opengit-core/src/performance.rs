@@ -9,9 +9,7 @@
 //! - Lazy loading for large repositories
 
 use ahash::{AHashMap, AHashSet};
-use std::collections::hash_map::Entry;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
@@ -94,7 +92,7 @@ impl GitObjectCache {
             drop(entries);
             self.record_hit().await;
 
-            let mut entries = self.entries.read().await;
+            let entries = self.entries.read().await;
             return entries.get(&key).map(|e| e.data.clone());
         }
 

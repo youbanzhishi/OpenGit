@@ -312,7 +312,6 @@ pub struct RateLimiter {
 }
 
 #[allow(dead_code)]
-
 impl RateLimiter {
     /// Create a new rate limiter from config
     pub fn new(config: RateLimitConfig) -> Self {

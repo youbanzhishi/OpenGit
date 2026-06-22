@@ -3,11 +3,11 @@
 //! P5.2: Git Gateway - Automatic push-based mirroring to remote Git hosts.
 //! Includes security validation to protect backup repositories.
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 /// Null SHA - represents deletion/empty
 const NULL_SHA: &str = "0000000000000000000000000000000000000000";

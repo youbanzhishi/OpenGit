@@ -508,8 +508,6 @@ impl AlertDispatcher {
 
         // Add HMAC signature if secret configured
         if let Some(ref secret) = self.config.webhook_secret {
-            use std::io::Write;
-
             use hmac_sha256::HMAC;
             let mut mac = HMAC::new(secret.as_bytes());
             mac.update(json_str.as_bytes());

@@ -7,7 +7,6 @@ use anyhow::{Context, Result};
 use git2::{Signature, Tree, Repository as Git2Repo};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use std::time::SystemTime;
 
 /// Request to append a file
 #[derive(Debug, Clone, Serialize, Deserialize)]

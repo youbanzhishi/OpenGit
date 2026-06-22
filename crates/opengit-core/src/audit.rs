@@ -7,9 +7,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing;
-
-use crate::mirror::{MirrorError, MirrorPushResult, MirrorSeverity};
+use crate::mirror::{MirrorError, MirrorPushResult};
 
 /// Audit entry for a mirror operation
 #[derive(Debug, Clone, Serialize, Deserialize)]

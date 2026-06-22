@@ -9,7 +9,6 @@ use crate::ai_guard::AiGuard;
 use crate::audit::{AuditEntry, AuditLog};
 use crate::policy::{Action, PolicyEngine};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
 
 /// Context provided to hook execution
 #[derive(Debug, Clone)]
@@ -185,7 +184,7 @@ impl HookPipeline {
             ref_results.push(RefResult {
                 ref_name: update.ref_name.clone(),
                 action: result.action,
-                allowed: allowed,
+                allowed,
                 reason: result.reason.clone(),
             });
         }
@@ -240,7 +239,7 @@ impl HookPipeline {
             ref_results: vec![RefResult {
                 ref_name: update.ref_name.clone(),
                 action: result.action,
-                allowed: allowed,
+                allowed,
                 reason: result.reason.clone(),
             }],
             message: if allowed {
