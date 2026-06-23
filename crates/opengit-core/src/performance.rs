@@ -65,12 +65,12 @@ impl GitObjectCache {
     /// Get an entry from cache
     pub async fn get(
         &self,
-        repo_path: &PathBuf,
+        repo_path: &Path,
         object_id: &str,
         object_type: &str,
     ) -> Option<Vec<u8>> {
         let key = CacheKey {
-            repo_path: repo_path.clone(),
+            repo_path: repo_path.to_path_buf(),
             object_id: object_id.to_string(),
             object_type: object_type.to_string(),
         };
@@ -146,7 +146,7 @@ impl GitObjectCache {
 
         // Sort by access time (oldest first)
         let mut entries_vec: Vec<_> = entries.iter_mut().collect();
-        entries_vec.sort_by(|a, b| a.1.last_accessed.cmp(&b.1.last_accessed));
+        entries_vec.sort_by_key(|a| a.1.last_accessed);
 
         let mut freed = 0;
         let target = *current + new_size - self.max_size;
@@ -252,15 +252,13 @@ impl Default for ConnectionPoolConfig {
 
 /// HTTP client builder with connection pooling
 pub fn create_http_client(config: &ConnectionPoolConfig) -> reqwest::Client {
-    let pool = reqwest::ClientBuilder::new()
+    reqwest::ClientBuilder::new()
         .pool_max_idle_per_host(config.max_per_host)
         .tcp_keepalive(config.tcp_keepalive.then_some(Duration::from_secs(60)))
         .connect_timeout(Duration::from_secs(config.connect_timeout_secs))
         .timeout(Duration::from_secs(config.request_timeout_secs))
         .build()
-        .expect("Failed to create HTTP client");
-
-    pool
+        .expect("Failed to create HTTP client")
 }
 
 /// Ref resolution cache

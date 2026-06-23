@@ -128,6 +128,7 @@ async fn agent_register(
         name: identity.name,
         display_name: identity.display_name,
         kind: "agent".to_string(),
+        token: raw_token,
         permissions: vec![
             "read".to_string(),
             "create_repo".to_string(),

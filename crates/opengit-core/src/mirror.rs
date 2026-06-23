@@ -467,7 +467,7 @@ impl MirrorManager {
 
         // 确定要推送的 ref
         let ref_to_push = if ctx.ref_name.starts_with("refs/heads/") {
-            ctx.ref_name.replace("refs/heads/", "refs/heads/")
+            ctx.ref_name.to_string()
         } else {
             ctx.ref_name.to_string()
         };
