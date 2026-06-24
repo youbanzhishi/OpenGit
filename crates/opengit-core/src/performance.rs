@@ -292,9 +292,9 @@ impl RefCache {
     }
 
     /// Get cached SHA for a ref
-    pub async fn get(&self, repo_path: &PathBuf, ref_name: &str) -> Option<String> {
+    pub async fn get(&self, repo_path: &Path, ref_name: &str) -> Option<String> {
         let key = RefKey {
-            repo_path: repo_path.clone(),
+            repo_path: repo_path.to_path_buf(),
             ref_name: ref_name.to_string(),
         };
 

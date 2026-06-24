@@ -66,6 +66,7 @@ pub struct AgentInfo {
     pub name: String,
     pub display_name: Option<String>,
     pub kind: String,
+    pub token: String,
     pub permissions: Vec<String>,
 }
 
