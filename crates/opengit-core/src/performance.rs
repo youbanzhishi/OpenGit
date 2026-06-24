@@ -339,7 +339,7 @@ impl RefCache {
     }
 
     /// Invalidate cache for a repository
-    pub async fn invalidate_repo(&self, repo_path: &PathBuf) {
+    pub async fn invalidate_repo(&self, repo_path: &Path) {
         let mut entries = self.entries.write().await;
         entries.retain(|k, _| k.repo_path != *repo_path);
     }
@@ -377,7 +377,7 @@ impl RepoMetaCache {
         }
     }
 
-    pub async fn get(&self, repo_path: &PathBuf) -> Option<RepoMeta> {
+    pub async fn get(&self, repo_path: &Path) -> Option<RepoMeta> {
         let entries = self.entries.read().await;
         entries.get(repo_path).cloned()
     }
@@ -387,7 +387,7 @@ impl RepoMetaCache {
         entries.insert(repo_path, meta);
     }
 
-    pub async fn invalidate(&self, repo_path: &PathBuf) {
+    pub async fn invalidate(&self, repo_path: &Path) {
         let mut entries = self.entries.write().await;
         entries.remove(repo_path);
     }
@@ -410,25 +410,25 @@ impl LazyRepoScanner {
     }
 
     /// Check if repository needs scanning
-    pub async fn needs_scan(&self, repo_path: &PathBuf) -> bool {
+    pub async fn needs_scan(&self, repo_path: &Path) -> bool {
         let scanned = self.scanned.read().await;
         !scanned.contains(repo_path)
     }
 
     /// Mark repository as scanning
-    pub async fn start_scan(&self, repo_path: &PathBuf) -> bool {
+    pub async fn start_scan(&self, repo_path: &Path) -> bool {
         let mut scanning = self.scanning.write().await;
         if scanning.contains(repo_path) {
             return false;
         }
-        scanning.insert(repo_path.clone());
+        scanning.insert(repo_path.to_path_buf());
         true
     }
 
     /// Mark repository as scanned
-    pub async fn finish_scan(&self, repo_path: &PathBuf) {
+    pub async fn finish_scan(&self, repo_path: &Path) {
         let mut scanned = self.scanned.write().await;
-        scanned.insert(repo_path.clone());
+        scanned.insert(repo_path.to_path_buf());
 
         let mut scanning = self.scanning.write().await;
         scanning.remove(repo_path);
