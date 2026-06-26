@@ -32,7 +32,4 @@ ahash = "0.8"
 tempfile = "3"
 regex = "1"
 url = "2"
-pki-types = "1"
-ring = "0.17"
-aead = "0.5"
 tokio-util = { workspace = true }
