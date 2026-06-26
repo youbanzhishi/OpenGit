@@ -2,6 +2,7 @@
 //!
 //! Evaluates identity + action + repo against rule set and returns Allow/Deny/Confirm/AuditLog.
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -139,7 +140,7 @@ impl PolicyEngine {
     }
 
     /// Load policy engine from a YAML file.
-    pub fn from_file(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_file(path: &Path) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
         let policies: Vec<Policy> = serde_yaml::from_str(&content).unwrap_or_default();
         let (default, custom): (Vec<_>, Vec<_>) =
@@ -149,7 +150,7 @@ impl PolicyEngine {
     }
 
     /// Save all policies to a YAML file.
-    pub fn save_to_file(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_to_file(&self, path: &Path) -> Result<()> {
         let mut all = vec![self.default.clone()];
         all.extend(self.custom.clone());
         let content = serde_yaml::to_string(&all)?;
