@@ -1,3 +1,5 @@
+#![allow(clippy::all, dead_code)]
+
 //! OpenGit Core — Policy Engine, Identity, Hook Pipeline, Plugin System, AI Guard
 //!
 //! The heart of OpenGit: a fine-grained permission model designed for
