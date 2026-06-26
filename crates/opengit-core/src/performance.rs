@@ -8,6 +8,7 @@
 //! - Ref resolution cache
 //! - Lazy loading for large repositories
 
+use std::path::Path;
 use ahash::{AHashMap, AHashSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
