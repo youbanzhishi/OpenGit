@@ -472,6 +472,9 @@ impl AuditEntry {
             } => {
                 format!("{} ({})", target_name, target_url)
             }
+            AuditDetails::General { message } => {
+                message.clone().unwrap_or_default()
+            }
         };
 
         format!(
