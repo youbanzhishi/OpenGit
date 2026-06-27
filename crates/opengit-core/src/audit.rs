@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::mirror::{MirrorError, MirrorPushResult};
 
 /// Audit entry for a mirror operation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AuditEntry {
     /// Unique entry ID
@@ -396,6 +396,7 @@ impl AuditEntry {
             AuditOperation::TargetAdded => "➕",
             AuditOperation::TargetRemoved => "➖",
             AuditOperation::ConfigChanged => "⚙️",
+            _ => "📋",
         };
 
         let op_name = match self.operation {
@@ -406,6 +407,7 @@ impl AuditEntry {
             AuditOperation::TargetAdded => "Target Added",
             AuditOperation::TargetRemoved => "Target Removed",
             AuditOperation::ConfigChanged => "Config Changed",
+            _ => "General",
         };
 
         let details = match &self.details {
