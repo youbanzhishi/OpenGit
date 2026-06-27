@@ -11,6 +11,7 @@ use crate::mirror::{MirrorError, MirrorPushResult};
 
 /// Audit entry for a mirror operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AuditEntry {
     /// Unique entry ID
     pub id: String,
@@ -56,6 +57,33 @@ pub enum AuditOperation {
     TargetRemoved,
     /// Config changed
     ConfigChanged,
+    /// Repository creation
+    CreateRepo,
+    /// Repository deletion
+    DeleteRepo,
+    /// Git push
+    Push,
+    /// Git pull / read
+    Pull,
+    /// Webhook delivery
+    WebhookDelivery,
+    /// Mirror sync
+    MirrorSync,
+    /// Authentication event
+    Auth,
+    /// Token management
+    TokenManagement,
+    /// Policy change
+    PolicyChange,
+    /// Identity management
+    IdentityManagement,
+    /// Import operation
+    Import,
+    /// Group management
+    GroupManagement,
+    /// General operation
+    #[default]
+    General,
 }
 
 /// Details variant based on operation type

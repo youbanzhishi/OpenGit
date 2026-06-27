@@ -289,6 +289,7 @@ async fn create_repo(
         ref_name: None,
         allowed: true,
         reason: None,
+    ..Default::default(),
     });
 
     tracing::info!("Created repo: {} by {}", req.name, identity.0);
@@ -331,6 +332,7 @@ async fn delete_repo(
                     ref_name: None,
                     allowed: false,
                     reason: Some("Agent identity cannot delete repositories".into()),
+                ..Default::default(),
                 });
                 tracing::warn!("Agent {} attempted to delete repo {} - BLOCKED", identity.0, name);
                 return Err(StatusCode::FORBIDDEN);
@@ -351,6 +353,7 @@ async fn delete_repo(
                 ref_name: None,
                 allowed: false,
                 reason: result.reason.clone(),
+            ..Default::default(),
             });
             return Err(StatusCode::FORBIDDEN);
         }
@@ -379,6 +382,7 @@ async fn delete_repo(
         ref_name: None,
         allowed: true,
         reason: Some("Moved to trash".into()),
+    ..Default::default(),
     });
 
     tracing::info!("Deleted repo: {} by {} (moved to trash)", name, identity.0);
@@ -485,6 +489,7 @@ async fn bulk_create_repos(
                     ref_name: None,
                     allowed: true,
                     reason: None,
+                ..Default::default(),
                 });
             }
             Err(e) => {
@@ -610,6 +615,7 @@ async fn add_policy_rule(
             "Added rule: {} → {:?} → {:?}",
             req.identity, action, permission
         )),
+    ..Default::default(),
     });
 
     tracing::info!("Policy rule added by {}", caller.0);
@@ -702,6 +708,7 @@ async fn register_identity(
         ref_name: None,
         allowed: true,
         reason: Some(format!("Registered {} ({})", info.name, info.kind)),
+    ..Default::default(),
     });
 
     tracing::info!(
@@ -746,6 +753,7 @@ async fn generate_token(
         ref_name: None,
         allowed: true,
         reason: Some(format!("Token '{}' generated for {}", req.label, name)),
+    ..Default::default(),
     });
 
     tracing::info!("Token generated for {} by {}", name, caller.0);
@@ -789,6 +797,7 @@ async fn delete_identity(
         ref_name: None,
         allowed: true,
         reason: Some(format!("Deleted identity {}", name)),
+    ..Default::default(),
     });
 
     tracing::info!("Identity deleted: {} by {}", name, caller.0);

@@ -39,6 +39,8 @@ base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 clap = { version = "4", features = ["derive", "env"] }
 
+hmac = "0.12"
+
 # Locked versions for compatibility with Rust 1.85
 [workspace.dependencies.rustls]
 version = "=0.23.20"

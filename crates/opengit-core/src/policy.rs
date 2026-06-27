@@ -51,6 +51,13 @@ pub enum Permission {
     AuditLog,
 }
 
+impl Permission {
+    /// Returns true if this permission allows the operation.
+    pub fn is_allowed(&self) -> bool {
+        matches!(self, Self::Allow | Self::AuditLog)
+    }
+}
+
 /// Result of a policy evaluation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvalResult {
@@ -190,6 +197,23 @@ impl PolicyEngine {
     ) -> EvalResult {
         self.evaluate(repo, identity, Action::Push)
     }
+
+    /// Evaluate a push operation with a repository path (used by hooks).
+    ///
+    /// The `repo_path` parameter is accepted for API compatibility;
+    /// the actual evaluation uses only the repo name.
+    pub fn evaluate_push_with_repo(
+        &self,
+        repo: &str,
+        identity: &str,
+        ref_name: &str,
+        old_sha: &str,
+        new_sha: &str,
+        _repo_path: &Path,
+    ) -> EvalResult {
+        self.evaluate_push(repo, identity, ref_name, old_sha, new_sha)
+    }
+
 
     fn eval_rules(&self, rules: &[PolicyRule], identity: &str, action: Action) -> Option<EvalResult> {
         for rule in rules {
