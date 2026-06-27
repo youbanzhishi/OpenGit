@@ -40,7 +40,7 @@ pub struct AuditEntry {
 }
 
 /// Operation types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum AuditOperation {
     /// Push attempt to mirrors
@@ -115,6 +115,17 @@ pub enum AuditDetails {
         target_name: String,
         target_url: String,
     },
+    /// General/generic details
+    General {
+        /// Optional message
+        message: Option<String>,
+    },
+}
+
+impl Default for AuditDetails {
+    fn default() -> Self {
+        Self::General { message: None }
+    }
 }
 
 /// Individual target attempt result
