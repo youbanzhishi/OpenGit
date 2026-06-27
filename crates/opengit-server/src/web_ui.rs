@@ -20,14 +20,15 @@ use opengit_core::{
     file_append::{append_file, file_exists, list_files, AppendFileRequest},
     mirror::MirrorsFile,
     repository::{RefInfo, Repository},
-    webhook::WebhookConfig,
+
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::config::ServerConfig;
 use crate::middleware::IdentityName;
-use crate::AppState;
+use crate::webhook::WebhookConfig;
+use crate::api::AppState;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Router

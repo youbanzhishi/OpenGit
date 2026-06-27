@@ -9,12 +9,9 @@ use axum::{
     Json, Router,
 };
 use opengit_core::{
-    identity::{Identity, IdentityKind, IdentityStore},
-    policy::PolicyEngine,
+    identity::{Identity, IdentityStore},
 };
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use serde::Serialize;
 
 use crate::api::SharedState;
 use crate::middleware::{require_auth, IdentityName};

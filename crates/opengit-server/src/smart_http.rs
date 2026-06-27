@@ -219,7 +219,7 @@ pub async fn receive_pack(
             ref_name: None,
             allowed: false,
             reason: push_result.reason.clone(),
-        ..Default::default(),
+        ..Default::default()
         });
         state.stats.record_denial();
 
@@ -297,7 +297,7 @@ pub async fn receive_pack(
                         ref_name: None,
                         allowed: true,
                         reason: None,
-                    ..Default::default(),
+                    ..Default::default()
                     });
 
                 // Deliver webhooks with precise ref info
@@ -347,7 +347,7 @@ pub async fn receive_pack(
                             "git-receive-pack exited with code {:?}",
                             status.code()
                         )),
-                    ..Default::default(),
+                    ..Default::default()
                     });
             }
             Err(e) => {

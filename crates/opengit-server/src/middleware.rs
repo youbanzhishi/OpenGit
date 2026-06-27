@@ -13,7 +13,7 @@ use axum::{
 use opengit_core::rate_limiter::{RateLimitKind, RateLimitResult, RateLimiter};
 
 use crate::api::SharedState;
-use crate::AppState;
+use crate::api::AppState;
 
 /// The authenticated identity name (stored in request extensions)
 #[derive(Clone, Debug)]

@@ -1,7 +1,6 @@
 //! Server configuration — loaded from TOML file with CLI overrides.
 
 use anyhow::Result;
-use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
