@@ -206,7 +206,7 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
     let dashboard = opengit_dashboard::build_router(dashboard_state);
 
     // Agent API routes
-    let agent_api = crate::agent_api::build_agent_router();
+    let agent_api = crate::agent_api::build_agent_router(state.clone());
 
     // Rate limit middleware helper
     let rate_limit_mw = |req: axum::extract::Request,
@@ -223,7 +223,7 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         .route("/health", get(health))
         .nest("/api", api_routes)
         .nest("/api/agent", agent_api)
-        .merge(crate::web_ui::build_web_ui_router())
+        .merge(crate::web_ui::build_web_ui_router(state.clone()))
         .merge(smart_http)
         .merge(dashboard)
         .layer(middleware::from_fn_with_state(
@@ -284,10 +284,10 @@ async fn create_repo(
     state.audit_log.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: req.name.clone(),
-        identity: identity.0.clone(),
-        action: "CreateRepo".into(),
+        identity: Some( identity.0.clone()),
+        action: Some( "CreateRepo".into()),
         ref_name: None,
-        allowed: true,
+        allowed: Some( true),
         reason: None,
     ..Default::default()
     });
@@ -327,10 +327,10 @@ async fn delete_repo(
                 state.audit_log.log(opengit_core::audit::AuditEntry {
                     timestamp: chrono::Utc::now().to_rfc3339(),
                     repo: name.clone(),
-                    identity: identity.0.clone(),
-                    action: "DeleteRepo".into(),
+                    identity: Some( identity.0.clone()),
+                    action: Some( "DeleteRepo".into()),
                     ref_name: None,
-                    allowed: false,
+                    allowed: Some( false),
                     reason: Some("Agent identity cannot delete repositories".into()),
                 ..Default::default()
                 });
@@ -348,10 +348,10 @@ async fn delete_repo(
             state.audit_log.log(opengit_core::audit::AuditEntry {
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 repo: name.clone(),
-                identity: identity.0.clone(),
-                action: "DeleteRepo".into(),
+                identity: Some( identity.0.clone()),
+                action: Some( "DeleteRepo".into()),
                 ref_name: None,
-                allowed: false,
+                allowed: Some( false),
                 reason: result.reason.clone(),
             ..Default::default()
             });
@@ -377,10 +377,10 @@ async fn delete_repo(
     state.audit_log.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: name.clone(),
-        identity: identity.0.clone(),
-        action: "DeleteRepo".into(),
+        identity: Some( identity.0.clone()),
+        action: Some( "DeleteRepo".into()),
         ref_name: None,
-        allowed: true,
+        allowed: Some( true),
         reason: Some("Moved to trash".into()),
     ..Default::default()
     });
@@ -484,10 +484,10 @@ async fn bulk_create_repos(
                 state.audit_log.log(opengit_core::audit::AuditEntry {
                     timestamp: chrono::Utc::now().to_rfc3339(),
                     repo: name.clone(),
-                    identity: identity.0.clone(),
-                    action: "CreateRepo".into(),
+                    identity: Some( identity.0.clone()),
+                    action: Some( "CreateRepo".into()),
                     ref_name: None,
-                    allowed: true,
+                    allowed: Some( true),
                     reason: None,
                 ..Default::default()
                 });
@@ -607,10 +607,10 @@ async fn add_policy_rule(
     state.audit_log.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: req.repo.clone().unwrap_or_else(|| "*".into()),
-        identity: caller.0.clone(),
-        action: "AddPolicyRule".into(),
+        identity: Some( caller.0.clone()),
+        action: Some( "AddPolicyRule".into()),
         ref_name: None,
-        allowed: true,
+        allowed: Some( true),
         reason: Some(format!(
             "Added rule: {} → {:?} → {:?}",
             req.identity, action, permission
@@ -703,10 +703,10 @@ async fn register_identity(
     state.audit_log.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: "*".into(),
-        identity: caller.0.clone(),
-        action: "RegisterIdentity".into(),
+        identity: Some( caller.0.clone()),
+        action: Some( "RegisterIdentity".into()),
         ref_name: None,
-        allowed: true,
+        allowed: Some( true),
         reason: Some(format!("Registered {} ({})", info.name, info.kind)),
     ..Default::default()
     });
@@ -748,17 +748,17 @@ async fn generate_token(
     state.audit_log.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: "*".into(),
-        identity: caller.0.clone(),
-        action: "GenerateToken".into(),
+        identity: Some( caller.0.clone()),
+        action: Some( "GenerateToken".into()),
         ref_name: None,
-        allowed: true,
+        allowed: Some( true),
         reason: Some(format!("Token '{}' generated for {}", req.label, name)),
     ..Default::default()
     });
 
     tracing::info!("Token generated for {} by {}", name, caller.0);
     Ok(Json(GenerateTokenResponse {
-        identity: name,
+        identity: Some( name),
         token: secret,
         label: req.label,
     }))
@@ -792,10 +792,10 @@ async fn delete_identity(
     state.audit_log.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: "*".into(),
-        identity: caller.0.clone(),
-        action: "DeleteIdentity".into(),
+        identity: Some( caller.0.clone()),
+        action: Some( "DeleteIdentity".into()),
         ref_name: None,
-        allowed: true,
+        allowed: Some( true),
         reason: Some(format!("Deleted identity {}", name)),
     ..Default::default()
     });
@@ -1156,6 +1156,7 @@ async fn add_mirror(
     {
         let mut mirrors = state.mirrors.write().await;
         mirrors.mirrors.push(MirrorTarget {
+            ssh_key: req.ssh_key.clone(),
             name: req.name,
             url: req.url,
             repos: req.repos.unwrap_or_default(),
@@ -1226,6 +1227,7 @@ pub struct AddMirrorRequest {
     pub url: String,
     pub repos: Option<Vec<String>>,
     pub refs: Option<Vec<String>>,
+    pub ssh_key: Option<String>,
 }
 
 // ─── Import & Migration endpoints (P6/P7) ───────────────────────────

@@ -352,6 +352,15 @@ impl AuditLog {
         self.entries.iter().rev().take(count).collect()
     }
 
+
+    /// Get denied entries (where allowed is Some(false))
+    pub fn denied_entries(&self) -> Vec<&AuditEntry> {
+        self.entries
+            .iter()
+            .filter(|e| e.allowed == Some(false))
+            .collect()
+    }
+
     /// Get blocked operations count
     pub fn blocked_count(&self) -> usize {
         self.entries

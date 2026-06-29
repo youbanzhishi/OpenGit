@@ -28,14 +28,14 @@ use std::sync::Arc;
 use crate::config::ServerConfig;
 use crate::middleware::IdentityName;
 use crate::webhook::WebhookConfig;
-use crate::api::AppState;
+use crate::api::{AppState, SharedState};
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Router
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Build the Web UI router
-pub fn build_web_ui_router() -> Router {
+pub fn build_web_ui_router(state: SharedState) -> Router {
     Router::new()
         .route("/", get(index_page))
         .route("/repos", get(repos_page))
@@ -355,7 +355,6 @@ async fn api_update_email_config(
 // File Append API (P8.3)
 // ══════════════════════════════════════════════════════════════════════════════
 
-use serde::Deserialize;
 
 /// Query params for file operations
 #[derive(Debug, Deserialize)]

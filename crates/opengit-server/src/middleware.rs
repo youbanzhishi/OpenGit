@@ -144,7 +144,7 @@ pub async fn rate_limit(
         RateLimitResult::Allowed { remaining, reset_in } => {
             // Add rate limit headers
             let mut response = next.run(request).await;
-            add_rate_limit_headers(response.headers(), remaining, reset_in);
+            add_rate_limit_headers(response.headers_mut(), remaining, reset_in);
             Ok(response)
         }
         RateLimitResult::Denied { reason, retry_after } => {

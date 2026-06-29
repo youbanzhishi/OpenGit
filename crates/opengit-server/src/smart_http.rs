@@ -214,10 +214,10 @@ pub async fn receive_pack(
         state.audit_log.log(opengit_core::audit::AuditEntry {
             timestamp: chrono::Utc::now().to_rfc3339(),
             repo: repo_name.clone(),
-            identity: identity.0.clone(),
-            action: "Push".into(),
+            identity: Some( identity.0.clone()),
+            action: Some( "Push".into()),
             ref_name: None,
-            allowed: false,
+            allowed: Some( false),
             reason: push_result.reason.clone(),
         ..Default::default()
         });
@@ -292,10 +292,10 @@ pub async fn receive_pack(
                     .log(opengit_core::audit::AuditEntry {
                         timestamp: chrono::Utc::now().to_rfc3339(),
                         repo: webhook_repo.clone(),
-                        identity: webhook_identity.clone(),
-                        action: "Push".into(),
+                        identity: Some( webhook_identity.clone()),
+                        action: Some( "Push".into()),
                         ref_name: None,
-                        allowed: true,
+                        allowed: Some( true),
                         reason: None,
                     ..Default::default()
                     });
@@ -317,7 +317,7 @@ pub async fn receive_pack(
                     // Fallback: generic push event
                     let payload = WebhookPayload {
                         repo: webhook_repo.clone(),
-                        identity: webhook_identity.clone(),
+                        identity: Some( webhook_identity.clone()),
                         event: "push".into(),
                         ref_name: "refs/heads/master".into(),
                         old_sha: String::new(),
@@ -339,10 +339,10 @@ pub async fn receive_pack(
                     .log(opengit_core::audit::AuditEntry {
                         timestamp: chrono::Utc::now().to_rfc3339(),
                         repo: webhook_repo,
-                        identity: webhook_identity,
-                        action: "Push".into(),
+                        identity: Some( webhook_identity),
+                        action: Some( "Push".into()),
                         ref_name: None,
-                        allowed: false,
+                        allowed: Some( false),
                         reason: Some(format!(
                             "git-receive-pack exited with code {:?}",
                             status.code()
