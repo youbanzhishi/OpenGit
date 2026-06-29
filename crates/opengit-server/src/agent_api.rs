@@ -20,7 +20,7 @@ use crate::api::SharedState;
 use crate::middleware::{require_auth, IdentityName};
 
 /// Build the Agent API router
-pub fn build_agent_router(state: SharedState) -> Router {
+pub fn build_agent_router(state: SharedState) -> Router<SharedState> {
     Router::new()
         .route("/register", post(agent_register))
         .route("/token", post(agent_token))

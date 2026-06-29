@@ -1541,9 +1541,10 @@ async fn update_group(
     let mut groups = state.groups.write().await;
     
     // Try by ID first, then by slug
-    let group_id = groups.get(&id)
-        .or_else(|| groups.get_by_slug(&id))
-        .map(|g| g.id.clone());
+    let group_id = groups
+        .get(&id)
+        .map(|g| g.id.clone())
+        .or_else(|| groups.get_by_slug(&id).map(|g| g.id.clone()));
     
     let group_id = match group_id {
         Some(id) => id,

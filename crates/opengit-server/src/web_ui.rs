@@ -35,7 +35,7 @@ use crate::api::{AppState, SharedState};
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Build the Web UI router
-pub fn build_web_ui_router(state: SharedState) -> Router {
+pub fn build_web_ui_router(state: SharedState) -> Router<SharedState> {
     Router::new()
         .route("/", get(index_page))
         .route("/repos", get(repos_page))
