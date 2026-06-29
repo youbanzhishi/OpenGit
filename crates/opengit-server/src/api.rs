@@ -807,13 +807,13 @@ async fn delete_identity(
 // ─── Audit endpoints ────────────────────────────────────────────────
 
 async fn get_audit(State(state): State<SharedState>) -> Json<Vec<opengit_core::audit::AuditEntry>> {
-    Json(state.audit_log.recent(100))
+    Json(state.audit_log.recent(100).into_iter().cloned().collect())
 }
 
 async fn get_denied_audit(
     State(state): State<SharedState>,
 ) -> Json<Vec<opengit_core::audit::AuditEntry>> {
-    Json(state.audit_log.denied_entries())
+    Json(state.audit_log.denied_entries().into_iter().cloned().collect())
 }
 
 // ─── Webhook endpoints ──────────────────────────────────────────────
@@ -1134,6 +1134,7 @@ async fn list_mirrors(State(state): State<SharedState>) -> Json<Vec<MirrorTarget
             repos: m.repos.clone(),
             refs: m.refs.clone(),
             enabled: m.enabled,
+            ssh_key: m.ssh_key.clone(),
         })
         .collect();
     Json(infos)
@@ -1219,6 +1220,7 @@ pub struct MirrorTargetInfo {
     pub repos: Vec<String>,
     pub refs: Vec<String>,
     pub enabled: bool,
+    pub ssh_key: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
