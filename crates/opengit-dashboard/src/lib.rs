@@ -16,7 +16,7 @@ pub struct DashboardState {
 }
 
 /// Build the dashboard router with embedded HTML
-pub fn build_router(state: Arc<DashboardState>) -> Router {
+pub fn build_router() -> Router {
     Router::new()
         .route("/", get(dashboard_index))
         .route("/dashboard.js", get(dashboard_js))
@@ -25,7 +25,6 @@ pub fn build_router(state: Arc<DashboardState>) -> Router {
         .route("/api/config/policy", get(get_policy_config))
         .route("/api/config/webhooks", get(get_webhooks_config))
         .route("/api/config/mirrors", get(get_mirrors_config))
-        .with_state(state)
 }
 
 /// Embedded HTML - Main Dashboard Page
@@ -54,9 +53,9 @@ async fn dashboard_css() -> impl IntoResponse {
 }
 
 /// Server configuration endpoint for dashboard
-async fn get_server_config(State(state): State<Arc<DashboardState>>) -> impl IntoResponse {
+async fn get_server_config() -> impl IntoResponse {
     Json(serde_json::json!({
-        "version": state.server_version,
+        "version": env!("CARGO_PKG_VERSION"),
         "features": ["repos", "policy", "webhooks", "mirrors", "audit", "import"]
     }))
 }

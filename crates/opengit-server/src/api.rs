@@ -34,7 +34,7 @@ pub struct AppState {
     pub config: ServerConfig,
     pub policy_engine: RwLock<PolicyEngine>,
     pub identity_store: RwLock<IdentityStore>,
-    pub audit_log: AuditLog,
+    pub audit_log: RwLock<AuditLog>,
     pub webhooks: RwLock<Vec<WebhookConfig>>,
     pub stats: ServerStats,
     pub mirrors: RwLock<MirrorsFile>,
@@ -131,7 +131,7 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         config: config.clone(),
         policy_engine: RwLock::new(policy_engine),
         identity_store: RwLock::new(identity_store),
-        audit_log,
+        audit_log: RwLock::new(audit_log),
         webhooks: RwLock::new(webhooks),
         stats: ServerStats::new(),
         mirrors: RwLock::new(mirrors),
@@ -200,10 +200,7 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // Dashboard routes — Web UI
-    let dashboard_state = Arc::new(opengit_dashboard::DashboardState {
-        server_version: env!("CARGO_PKG_VERSION").to_string(),
-    });
-    let dashboard = opengit_dashboard::build_router(dashboard_state);
+    let dashboard = opengit_dashboard::build_router();
 
     // Agent API routes
     let agent_api = crate::agent_api::build_agent_router(state.clone());
@@ -281,7 +278,7 @@ async fn create_repo(
         tracing::warn!("Failed to install hooks for {}: {}", req.name, e);
     }
 
-    state.audit_log.log(opengit_core::audit::AuditEntry {
+    state.audit_log.write().await.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: req.name.clone(),
         identity: Some( identity.0.clone()),
@@ -324,7 +321,7 @@ async fn delete_repo(
         let identity_store = state.identity_store.read().await;
         if let Some(identity_info) = identity_store.find(&identity.0) {
             if identity_info.is_agent() && !identity_info.agent_can_do("delete_repo") {
-                state.audit_log.log(opengit_core::audit::AuditEntry {
+                state.audit_log.write().await.log(opengit_core::audit::AuditEntry {
                     timestamp: chrono::Utc::now().to_rfc3339(),
                     repo: name.clone(),
                     identity: Some( identity.0.clone()),
@@ -345,7 +342,7 @@ async fn delete_repo(
         let engine = state.policy_engine.read().await;
         let result = engine.evaluate(&name, &identity.0, Action::DeleteRepo);
         if !result.is_allowed() {
-            state.audit_log.log(opengit_core::audit::AuditEntry {
+            state.audit_log.write().await.log(opengit_core::audit::AuditEntry {
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 repo: name.clone(),
                 identity: Some( identity.0.clone()),
@@ -374,7 +371,7 @@ async fn delete_repo(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    state.audit_log.log(opengit_core::audit::AuditEntry {
+    state.audit_log.write().await.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: name.clone(),
         identity: Some( identity.0.clone()),
@@ -481,7 +478,7 @@ async fn bulk_create_repos(
                 }
                 created.push(name.clone());
 
-                state.audit_log.log(opengit_core::audit::AuditEntry {
+                state.audit_log.write().await.log(opengit_core::audit::AuditEntry {
                     timestamp: chrono::Utc::now().to_rfc3339(),
                     repo: name.clone(),
                     identity: Some( identity.0.clone()),
@@ -604,7 +601,7 @@ async fn add_policy_rule(
         }
     }
 
-    state.audit_log.log(opengit_core::audit::AuditEntry {
+    state.audit_log.write().await.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: req.repo.clone().unwrap_or_else(|| "*".into()),
         identity: Some( caller.0.clone()),
@@ -700,7 +697,7 @@ async fn register_identity(
         }
     }
 
-    state.audit_log.log(opengit_core::audit::AuditEntry {
+    state.audit_log.write().await.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: "*".into(),
         identity: Some( caller.0.clone()),
@@ -745,7 +742,7 @@ async fn generate_token(
         secret
     };
 
-    state.audit_log.log(opengit_core::audit::AuditEntry {
+    state.audit_log.write().await.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: "*".into(),
         identity: Some( caller.0.clone()),
@@ -758,7 +755,7 @@ async fn generate_token(
 
     tracing::info!("Token generated for {} by {}", name, caller.0);
     Ok(Json(GenerateTokenResponse {
-        identity: Some( name),
+        identity: name,
         token: secret,
         label: req.label,
     }))
@@ -789,7 +786,7 @@ async fn delete_identity(
         }
     }
 
-    state.audit_log.log(opengit_core::audit::AuditEntry {
+    state.audit_log.write().await.log(opengit_core::audit::AuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         repo: "*".into(),
         identity: Some( caller.0.clone()),
@@ -807,13 +804,13 @@ async fn delete_identity(
 // ─── Audit endpoints ────────────────────────────────────────────────
 
 async fn get_audit(State(state): State<SharedState>) -> Json<Vec<opengit_core::audit::AuditEntry>> {
-    Json(state.audit_log.recent(100).into_iter().cloned().collect())
+    Json(state.audit_log.read().await.recent(100).into_iter().cloned().collect())
 }
 
 async fn get_denied_audit(
     State(state): State<SharedState>,
 ) -> Json<Vec<opengit_core::audit::AuditEntry>> {
-    Json(state.audit_log.denied_entries().into_iter().cloned().collect())
+    Json(state.audit_log.read().await.denied_entries().into_iter().cloned().collect())
 }
 
 // ─── Webhook endpoints ──────────────────────────────────────────────
@@ -1551,11 +1548,13 @@ async fn update_group(
         None => return Err(StatusCode::NOT_FOUND),
     };
 
-    // Update fields
-    if let Some(tags) = req.tags {
-        if let Some(group) = groups.get_mut(&group_id) {
-            group.tags = tags;
-            group.touch();
+    // Update fields (in block to end mutable borrow before update)
+    {
+        if let Some(tags) = req.tags {
+            if let Some(group) = groups.get_mut(&group_id) {
+                group.tags = tags;
+                group.touch();
+            }
         }
     }
 

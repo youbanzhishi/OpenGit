@@ -151,29 +151,29 @@ async fn agent_token(
     let mut store = state.identity_store.write().await;
 
     let identity = store.find_mut(&format!("agent-{}", req.name));
-    let identity = match identity {
-        Some(i) => i,
+    let (identity_name, raw_token) = match identity {
+        Some(i) => {
+            // Verify it's an agent
+            if i.kind != IdentityKind::Agent {
+                return Err(StatusCode::FORBIDDEN);
+            }
+            // Generate new token
+            let label = req.label.unwrap_or_else(|| "default".to_string());
+            let raw_token = i.generate_token(&label);
+            (i.name.clone(), raw_token)
+        }
         None => return Err(StatusCode::NOT_FOUND),
     };
-
-    // Verify it's an agent
-    if identity.kind != IdentityKind::Agent {
-        return Err(StatusCode::FORBIDDEN);
-    }
-
-    // Generate new token
-    let label = req.label.unwrap_or_else(|| "default".to_string());
-    let raw_token = identity.generate_token(&label);
 
     // Persist
     if let Err(e) = store.save_to_file(&state.config.identity_file) {
         tracing::error!("Failed to save identity: {}", e);
     }
 
-    tracing::info!("Token generated for agent: {}", identity.name);
+    tracing::info!("Token generated for agent: {}", identity_name);
 
     Ok(Json(AgentTokenResponse {
-        identity: identity.name.clone(),
+        identity: identity_name,
         token: raw_token,
         kind: "agent".to_string(),
         permissions: vec![

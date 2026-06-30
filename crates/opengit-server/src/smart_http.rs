@@ -211,7 +211,7 @@ pub async fn receive_pack(
             repo_name,
             push_result.reason.as_deref().unwrap_or("policy denied")
         );
-        state.audit_log.log(opengit_core::audit::AuditEntry {
+        state.audit_log.write().await.log(opengit_core::audit::AuditEntry {
             timestamp: chrono::Utc::now().to_rfc3339(),
             repo: repo_name.clone(),
             identity: Some( identity.0.clone()),
@@ -288,7 +288,7 @@ pub async fn receive_pack(
                 webhook_state.stats.record_push();
 
                 webhook_state
-                    .audit_log
+                    .audit_log.write().await
                     .log(opengit_core::audit::AuditEntry {
                         timestamp: chrono::Utc::now().to_rfc3339(),
                         repo: webhook_repo.clone(),
@@ -317,7 +317,7 @@ pub async fn receive_pack(
                     // Fallback: generic push event
                     let payload = WebhookPayload {
                         repo: webhook_repo.clone(),
-                        identity: Some( webhook_identity.clone()),
+                        identity: webhook_identity.clone(),
                         event: "push".into(),
                         ref_name: "refs/heads/master".into(),
                         old_sha: String::new(),
@@ -335,7 +335,7 @@ pub async fn receive_pack(
                     status.code()
                 );
                 webhook_state
-                    .audit_log
+                    .audit_log.write().await
                     .log(opengit_core::audit::AuditEntry {
                         timestamp: chrono::Utc::now().to_rfc3339(),
                         repo: webhook_repo,
