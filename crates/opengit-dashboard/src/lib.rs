@@ -3,12 +3,10 @@
 //! P6: Dashboard module providing static file serving and embedded HTML
 
 use axum::{
-    extract::State,
     response::{Html, IntoResponse},
     routing::get,
     Router,
 };
-use std::sync::Arc;
 
 /// Dashboard state (lightweight, mostly for config reference)
 pub struct DashboardState {
