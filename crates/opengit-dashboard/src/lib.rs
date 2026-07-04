@@ -14,8 +14,11 @@ pub struct DashboardState {
 }
 
 /// Build the dashboard router with embedded HTML
-pub fn build_router() -> Router {
-    Router::new()
+pub fn build_router<S>() -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    Router::<S>::new()
         .route("/", get(dashboard_index))
         .route("/dashboard.js", get(dashboard_js))
         .route("/dashboard.css", get(dashboard_css))

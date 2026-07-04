@@ -1558,12 +1558,13 @@ async fn update_group(
         }
     }
 
-    match groups.update(
+    let update_result = groups.update(
         &group_id,
         req.name.as_deref(),
         req.description,
         req.visibility,
-    ) {
+    );
+    match update_result {
         Ok(Some(group)) => {
             if let Err(e) = groups.save(&state.config.group_file) {
                 tracing::warn!("Failed to save groups: {}", e);

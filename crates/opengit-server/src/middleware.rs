@@ -10,10 +10,9 @@ use axum::{
     response::Response,
 };
 
-use opengit_core::rate_limiter::{RateLimitKind, RateLimitResult, RateLimiter};
+use opengit_core::rate_limiter::{RateLimitKind, RateLimitResult};
 
 use crate::api::SharedState;
-use crate::api::AppState;
 
 /// The authenticated identity name (stored in request extensions)
 #[derive(Clone, Debug)]
@@ -66,7 +65,7 @@ fn base64_decode(input: &str) -> Result<String, ()> {
 /// The Smart HTTP handlers do their own fine-grained permission checks.
 pub async fn smart_http_auth(
     State(state): State<SharedState>,
-    mut request: Request,
+    request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
     // Try to extract and validate token
@@ -147,7 +146,7 @@ pub async fn rate_limit(
             add_rate_limit_headers(response.headers_mut(), remaining, reset_in);
             Ok(response)
         }
-        RateLimitResult::Denied { reason, retry_after } => {
+        RateLimitResult::Denied { reason, retry_after: _ } => {
             tracing::warn!(
                 "Rate limit exceeded: ip={}, identity={}, kind={:?}, reason={}",
                 ip,

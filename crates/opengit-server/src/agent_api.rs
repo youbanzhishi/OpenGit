@@ -2,7 +2,6 @@
 //!
 //! P6.1: Agent API with restricted permissions
 
-use std::sync::Arc;
 use serde::Deserialize;
 use opengit_core::identity::IdentityKind;
 use axum::{
@@ -12,12 +11,12 @@ use axum::{
     Json, Router,
 };
 use opengit_core::{
-    identity::{Identity, IdentityStore},
+    identity::Identity,
 };
 use serde::Serialize;
 
 use crate::api::SharedState;
-use crate::middleware::{require_auth, IdentityName};
+use crate::middleware::IdentityName;
 
 /// Build the Agent API router
 pub fn build_agent_router(state: SharedState) -> Router<SharedState> {

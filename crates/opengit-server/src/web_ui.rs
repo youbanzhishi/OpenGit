@@ -25,7 +25,6 @@ use opengit_core::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::config::ServerConfig;
 use crate::middleware::IdentityName;
 use crate::webhook::WebhookConfig;
 use crate::api::{AppState, SharedState};
@@ -35,7 +34,7 @@ use crate::api::{AppState, SharedState};
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Build the Web UI router
-pub fn build_web_ui_router(state: SharedState) -> Router<SharedState> {
+pub fn build_web_ui_router(_state: SharedState) -> Router<SharedState> {
     Router::new()
         .route("/", get(index_page))
         .route("/repos", get(repos_page))

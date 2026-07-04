@@ -1353,6 +1353,7 @@ impl ApiClient {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn update_alert_email(
         &self,
         enabled: bool,
