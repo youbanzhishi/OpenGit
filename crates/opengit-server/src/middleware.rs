@@ -65,7 +65,7 @@ fn base64_decode(input: &str) -> Result<String, ()> {
 /// The Smart HTTP handlers do their own fine-grained permission checks.
 pub async fn smart_http_auth(
     State(state): State<SharedState>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
     // Try to extract and validate token
@@ -114,7 +114,7 @@ pub async fn require_auth(
 /// Applies rate limits based on IP and identity
 pub async fn rate_limit(
     State(state): State<SharedState>,
-    mut request: Request,
+    request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
     // Skip if rate limiter not initialized

@@ -1558,22 +1558,22 @@ async fn update_group(
         }
     }
 
-    let update_result = groups.update(
+    // Clone the group out of the match to end the mutable borrow on groups
+    let group_clone = match groups.update(
         &group_id,
         req.name.as_deref(),
         req.description,
         req.visibility,
-    );
-    match update_result {
-        Ok(Some(group)) => {
-            if let Err(e) = groups.save(&state.config.group_file) {
-                tracing::warn!("Failed to save groups: {}", e);
-            }
-            tracing::info!("Group updated: {} by {}", group.name, caller.0);
-            Ok(Json(group.clone()))
-        }
-        _ => Err(StatusCode::NOT_FOUND),
+    ) {
+        Ok(Some(group)) => group.clone(),
+        _ => return Err(StatusCode::NOT_FOUND),
+    };
+    // groups is no longer mutably borrowed here
+    if let Err(e) = groups.save(&state.config.group_file) {
+        tracing::warn!("Failed to save groups: {}", e);
     }
+    tracing::info!("Group updated: {} by {}", group_clone.name, caller.0);
+    Ok(Json(group_clone))
 }
 
 async fn delete_group(
