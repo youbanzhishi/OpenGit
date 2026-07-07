@@ -205,16 +205,6 @@ pub fn build_router(config: &ServerConfig) -> Result<Router, anyhow::Error> {
     // Agent API routes
     let agent_api = crate::agent_api::build_agent_router(state.clone());
 
-    // Rate limit middleware helper
-    let rate_limit_mw = |req: axum::extract::Request,
-                          next: axum::middleware::Next| async move {
-        crate::middleware::rate_limit(
-            State(req.extensions().get::<SharedState>().unwrap().clone()),
-            req,
-            next,
-        )
-        .await
-    };
 
     let app = Router::new()
         .route("/health", get(health))

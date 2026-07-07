@@ -168,11 +168,6 @@ async fn new_repo_page(State(state): State<Arc<AppState>>) -> impl IntoResponse 
 // ══════════════════════════════════════════════════════════════════════════════
 
 #[derive(Serialize)]
-struct ApiResponse<T> {
-    data: T,
-}
-
-#[derive(Serialize)]
 struct RepoListItem {
     name: String,
     description: String,
