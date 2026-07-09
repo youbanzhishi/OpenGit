@@ -49,43 +49,49 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux
+          # Linux (native)
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             artifact_name: opengit-x86_64-unknown-linux-gnu
             ext: tar.gz
+            use_cross: false
+          # Linux (cross-compile via cross)
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             artifact_name: opengit-aarch64-unknown-linux-gnu
             ext: tar.gz
-          # macOS
+            use_cross: true
+          # macOS (native x86_64)
           - target: x86_64-apple-darwin
-            runner: macos-latest
+            runner: macos-13
             artifact_name: opengit-x86_64-apple-darwin
             ext: tar.gz
+            use_cross: false
+          # macOS (native ARM)
           - target: aarch64-apple-darwin
             runner: macos-latest
             artifact_name: opengit-aarch64-apple-darwin
             ext: tar.gz
+            use_cross: false
           # Windows
           - target: x86_64-pc-windows-gnu
             runner: windows-latest
             artifact_name: opengit-x86_64-pc-windows-gnu
             ext: zip
+            use_cross: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install cross compile toolchains
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: ${{ matrix.target }}
+
+      - name: Install cross (for aarch64-linux)
+        if: matrix.use_cross == true
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Set macOS deployment target
         if: matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-apple-darwin'
@@ -95,15 +101,35 @@ jobs:
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/* -> target
+          workspaces: |
+            .
+            crates/opengit-core
+            crates/opengit-server
+            crates/opengit-cli
+            crates/opengit-storage
+            crates/opengit-ssh
+            crates/opengit-hooks
+            crates/opengit-dashboard
 
       - name: Build CLI
+        env:
+          OPENSSL_NO_VENDOR: "0"
         run: |
-          cargo build --release -p opengit-cli --target ${{ matrix.target }}
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release -p opengit-cli --target ${{ matrix.target }}
+          else
+            cargo build --release -p opengit-cli --target ${{ matrix.target }}
+          fi
 
       - name: Build Server
+        env:
+          OPENSSL_NO_VENDOR: "0"
         run: |
-          cargo build --release -p opengit-server --target ${{ matrix.target }}
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release -p opengit-server --target ${{ matrix.target }}
+          else
+            cargo build --release -p opengit-server --target ${{ matrix.target }}
+          fi
 
       - name: Prepare artifact (Unix)
         if: matrix.ext == 'tar.gz'
