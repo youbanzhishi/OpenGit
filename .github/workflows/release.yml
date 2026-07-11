@@ -112,6 +112,7 @@ jobs:
             crates/opengit-dashboard
 
       - name: Build CLI
+        shell: bash
         env:
           OPENSSL_NO_VENDOR: "0"
         run: |
@@ -122,6 +123,7 @@ jobs:
           fi
 
       - name: Build Server
+        shell: bash
         env:
           OPENSSL_NO_VENDOR: "0"
         run: |

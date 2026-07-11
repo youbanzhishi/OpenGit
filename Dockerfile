@@ -33,7 +33,7 @@ RUN groupadd --gid 1000 opengit     && useradd --uid 1000 --gid opengit --shell 
 WORKDIR /app
 
 # Copy binaries from builder
-COPY --from=builder /build/target/release/opengit /app/og
+COPY --from=builder /build/target/release/og /app/og
 COPY --from=builder /build/target/release/opengit-server /app/opengit-server
 
 # Create config directories
