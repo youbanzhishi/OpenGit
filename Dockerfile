@@ -7,7 +7,7 @@ FROM rust:1.88-slim AS builder
 WORKDIR /build
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y     gcc     pkg-config     libssl-dev     && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y     gcc     pkg-config     libssl-dev     perl     make     && rm -rf /var/lib/apt/lists/*
 
 # Copy manifests first for better caching
 COPY Cargo.toml Cargo.lock ./
@@ -50,3 +50,4 @@ EXPOSE 9418
 
 # ─── Health Check ────────────────────────────────────────────────
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3     CMD curl -f http://localhost:9418/health || exit 1
+
