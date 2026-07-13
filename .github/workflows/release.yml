@@ -1,6 +1,5 @@
 name: Release
 
-# 触发条件：推 tag (v*.*.*) 或手动触发
 on:
   push:
     tags:
@@ -14,12 +13,10 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Docker
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/opengit
 
 jobs:
-  # ─── 版本信息 ─────────────────────────────────────────────────
   version:
     name: Extract Version
     runs-on: ubuntu-latest
@@ -40,7 +37,6 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "prerelease=$(echo $VERSION | grep -qE 'beta|rc|alpha' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
-  # ─── 多平台二进制构建 ─────────────────────────────────────────
   build-binaries:
     name: Build ${{ matrix.target }}
     needs: version
@@ -49,19 +45,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux x86_64 (cross for glibc compat)
-          - target: x86_64-unknown-linux-gnu
+          # Linux x86_64 (musl static linking)
+          - target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
             artifact_name: opengit-x86_64-unknown-linux-gnu
             ext: tar.gz
             use_cross: true
-          # Linux aarch64 (cross-compile via cross)
+          # Linux aarch64
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             artifact_name: opengit-aarch64-unknown-linux-gnu
             ext: tar.gz
             use_cross: true
-          # macOS (native ARM)
+          # macOS ARM
           - target: aarch64-apple-darwin
             runner: macos-latest
             artifact_name: opengit-aarch64-apple-darwin
@@ -152,7 +148,6 @@ jobs:
           path: target/${{ matrix.target }}/release/*.${{ matrix.ext }}
           retention-days: 30
 
-  # ─── Docker 构建 ──────────────────────────────────────────────
   docker:
     name: Build Docker Image
     needs: version
@@ -198,7 +193,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ─── 生成校验和 ────────────────────────────────────────────────
   checksums:
     name: Generate Checksums
     needs: [version, build-binaries]
@@ -228,7 +222,6 @@ jobs:
           path: artifacts/SHA256SUMS.txt
           retention-days: 30
 
-  # ─── 发布 Release ─────────────────────────────────────────────
   release:
     name: Create Release
     needs: [version, build-binaries, checksums]
