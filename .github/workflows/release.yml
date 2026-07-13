@@ -49,15 +49,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux (native) - 使用 ubuntu-22.04 确保 glibc 兼容性
+          # Linux x86_64 (cross for glibc compat)
           - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-22.04
+            runner: ubuntu-latest
             artifact_name: opengit-x86_64-unknown-linux-gnu
             ext: tar.gz
-            use_cross: false
-          # Linux (cross-compile via cross)
+            use_cross: true
+          # Linux aarch64 (cross-compile via cross)
           - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-22.04
+            runner: ubuntu-latest
             artifact_name: opengit-aarch64-unknown-linux-gnu
             ext: tar.gz
             use_cross: true
@@ -82,7 +82,7 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross (for aarch64-linux)
+      - name: Install cross
         if: matrix.use_cross == true
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
@@ -132,14 +132,8 @@ jobs:
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
-          # 收集二进制 - CLI 二进制名是 og
           mkdir -p opengit-bin
           cp og opengit-server opengit-bin/ 2>/dev/null || true
-          # Linux 添加运行时库检查
-          if [[ "${{ matrix.target }}" == *"-linux-"* ]]; then
-            ldd og 2>/dev/null | grep "not found" || true
-          fi
-          # 打包
           tar czf ${{ matrix.artifact_name }}.tar.gz -C opengit-bin .
 
       - name: Prepare artifact (Windows)
