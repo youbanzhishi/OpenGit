@@ -49,15 +49,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux (native)
+          # Linux (native) - 使用 ubuntu-22.04 确保 glibc 兼容性
           - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
             artifact_name: opengit-x86_64-unknown-linux-gnu
             ext: tar.gz
             use_cross: false
           # Linux (cross-compile via cross)
           - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
             artifact_name: opengit-aarch64-unknown-linux-gnu
             ext: tar.gz
             use_cross: true
@@ -132,12 +132,12 @@ jobs:
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
-          # 收集二进制
+          # 收集二进制 - CLI 二进制名是 og
           mkdir -p opengit-bin
-          cp opengit opengit-server opengit-bin/ 2>/dev/null || true
-          # Linux 添加运行时库
+          cp og opengit-server opengit-bin/ 2>/dev/null || true
+          # Linux 添加运行时库检查
           if [[ "${{ matrix.target }}" == *"-linux-"* ]]; then
-            ldd opengit | grep "not found" || true
+            ldd og 2>/dev/null | grep "not found" || true
           fi
           # 打包
           tar czf ${{ matrix.artifact_name }}.tar.gz -C opengit-bin .
@@ -148,7 +148,7 @@ jobs:
         run: |
           cd target/${{ matrix.target }}/release
           mkdir -p opengit-bin
-          cp opengit.exe opengit-server.exe opengit-bin/ 2>/dev/null || true
+          cp og.exe opengit-server.exe opengit-bin/ 2>/dev/null || true
           powershell -Command "Compress-Archive -Path opengit-bin/* -DestinationPath ${{ matrix.artifact_name }}.zip"
 
       - name: Upload artifact
