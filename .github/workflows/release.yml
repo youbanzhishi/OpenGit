@@ -61,12 +61,6 @@ jobs:
             artifact_name: opengit-aarch64-unknown-linux-gnu
             ext: tar.gz
             use_cross: true
-          # macOS (native x86_64)
-          - target: x86_64-apple-darwin
-            runner: macos-13
-            artifact_name: opengit-x86_64-apple-darwin
-            ext: tar.gz
-            use_cross: false
           # macOS (native ARM)
           - target: aarch64-apple-darwin
             runner: macos-latest
@@ -94,7 +88,7 @@ jobs:
           cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Set macOS deployment target
-        if: matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-apple-darwin'
+        if: matrix.target == 'aarch64-apple-darwin'
         run: |
           echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
 
