@@ -88,18 +88,6 @@ jobs:
         run: |
           echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
 
-      - name: Cache cargo registry
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            .
-            crates/opengit-core
-            crates/opengit-server
-            crates/opengit-cli
-            crates/opengit-storage
-            crates/opengit-ssh
-            crates/opengit-hooks
-            crates/opengit-dashboard
 
       - name: Build CLI
         shell: bash
