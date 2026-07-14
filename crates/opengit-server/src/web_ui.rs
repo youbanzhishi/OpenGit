@@ -43,21 +43,21 @@ pub fn build_web_ui_router(_state: SharedState) -> Router<SharedState> {
         .route("/repos/new", get(new_repo_page))
         .route("/settings/email", get(email_settings_page))
         // API endpoints
-        .route("/api/list", get(api_list_repos))
-        .route("/api/repos", get(api_list_repos))
-        .route("/api/repos/{name}", get(api_get_repo))
-        .route("/api/repos/{name}/refs", get(api_get_refs))
-        .route("/api/repos/{name}/archive", get(api_archive))
-        .route("/api/repos/{name}/hooks", get(api_get_hooks))
-        .route("/api/repos/{name}/mirrors", get(api_get_mirrors))
-        .route("/api/mirrors", get(api_list_mirrors))
+        .route("/web-ui/api/list", get(api_list_repos))
+        .route("/web-ui/api/repos", get(api_list_repos))
+        .route("/web-ui/api/repos/{name}", get(api_get_repo))
+        .route("/web-ui/api/repos/{name}/refs", get(api_get_refs))
+        .route("/web-ui/api/repos/{name}/archive", get(api_archive))
+        .route("/web-ui/api/repos/{name}/hooks", get(api_get_hooks))
+        .route("/web-ui/api/repos/{name}/mirrors", get(api_get_mirrors))
+        .route("/web-ui/api/mirrors", get(api_list_mirrors))
         // Email API
-        .route("/api/email/config", get(api_get_email_config))
-        .route("/api/email/config", post(api_update_email_config))
+        .route("/web-ui/api/email/config", get(api_get_email_config))
+        .route("/web-ui/api/email/config", post(api_update_email_config))
         // File Append API (P8.3)
-        .route("/api/repos/{name}/files", get(api_list_files))
-        .route("/api/repos/{name}/files/exists", get(api_check_file_exists))
-        .route("/api/repos/{name}/append", post(api_append_file))
+        .route("/web-ui/api/repos/{name}/files", get(api_list_files))
+        .route("/web-ui/api/repos/{name}/files/exists", get(api_check_file_exists))
+        .route("/web-ui/api/repos/{name}/append", post(api_append_file))
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -880,8 +880,8 @@ static REPO_DETAIL_PAGE_HTML: &str = r#"<!DOCTYPE html>
       <div class="section-header">下载</div>
       <div class="section-body">
         <div class="download-grid">
-          <a href="/api/repos/{{repo_name}}/archive?format=zip" class="download-btn">📦 下载 ZIP</a>
-          <a href="/api/repos/{{repo_name}}/archive?format=tar.gz" class="download-btn">📦 下载 TAR.GZ</a>
+          <a href="/web-ui/api/repos/{{repo_name}}/archive?format=zip" class="download-btn">📦 下载 ZIP</a>
+          <a href="/web-ui/api/repos/{{repo_name}}/archive?format=tar.gz" class="download-btn">📦 下载 TAR.GZ</a>
         </div>
       </div>
     </div>
@@ -1386,7 +1386,7 @@ static AUTOMATION_PAGE_HTML: &str = r#"<!DOCTYPE html>
       }
 
       try {
-        const res = await fetch('/api/mirrors', {
+        const res = await fetch('/web-ui/api/mirrors', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -1721,7 +1721,7 @@ static EMAIL_SETTINGS_PAGE_HTML: &str = r#"
     let enabled = {{enabled}};
 
     async function loadConfig() {
-      const res = await fetch('/api/email/config');
+      const res = await fetch('/web-ui/api/email/config');
       const config = await res.json();
       document.getElementById('smtpHost').value = config.smtp_host || '';
       document.getElementById('smtpPort').value = config.smtp_port || 587;
@@ -1748,7 +1748,7 @@ static EMAIL_SETTINGS_PAGE_HTML: &str = r#"
         to: document.getElementById('to').value.split(',').map(s => s.trim()).filter(s => s),
         use_tls: true
       };
-      const res = await fetch('/api/email/config', {
+      const res = await fetch('/web-ui/api/email/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
