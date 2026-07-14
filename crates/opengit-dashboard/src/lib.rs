@@ -19,7 +19,6 @@ where
     S: Clone + Send + Sync + 'static,
 {
     Router::<S>::new()
-        .route("/", get(dashboard_index))
         .route("/dashboard.js", get(dashboard_js))
         .route("/dashboard.css", get(dashboard_css))
         .route("/api/config/server", get(get_server_config))
@@ -29,6 +28,7 @@ where
 }
 
 /// Embedded HTML - Main Dashboard Page
+#[allow(dead_code)]
 async fn dashboard_index() -> impl IntoResponse {
     Html(DASHBOARD_HTML)
 }
